@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "morphling",
+  "version": "${version}",
+
+  "name": "Morphling",
+  "description": "",
+  "authors": [],
+  "contact": {},
+
+  "icon": "assets/morphling/icon.png",
+
+  "environment": "*",
+  "entrypoints": {
+    "client": ["net.naw.morphling.client.MorphlingClient"],
+    "main": ["net.naw.morphling.Morphling"]
+  },
+
+  "mixins": [
+    "morphling.mixins.json"
+  ],
+
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": ">=26.1"
+  }
+}
