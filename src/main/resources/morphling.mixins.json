@@ -29,7 +29,8 @@
     "accessors.WolfSoundAccessor",
     "accessors.WolfTickAccessor",
     "accessors.WolfShakeAccessor",
-    "fear.CreeperAvoidMorphMixin",
+    "mob_ai.CreeperAvoidMorphMixin",
+    "mob_ai.ChickenFollowMorphMixin",
     "accessors.MobGoalSelectorAccessor",
     "player.PlayerAttackMixin",
     "accessors.IronGolemAttackAccessor",
@@ -55,7 +56,10 @@
     "render.headhide.DolphinHeadHideMixin",
     "dolphin.DolphinLandSpeedMixin",
     "dolphin.DolphinJumpCapMixin",
-    "player.CameraCrouchMixin"
+    "player.CameraCrouchMixin",
+    "render.hud.CrosshairMixin",
+    "render.ItemInHandRendererMixin",
+    "render.PlayerArmInterceptMixin"
 
   ],
   "injectors": {
