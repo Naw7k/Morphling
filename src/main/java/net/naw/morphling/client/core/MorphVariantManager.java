@@ -54,11 +54,26 @@ public class MorphVariantManager {
         }
     }
 
+    // Plays a UI feedback sound when the user changes a variant
+    // (e.g. cycling through cat colors). Low volume + slightly higher pitch
+    // so it's smooth and unobtrusive.
+    private static void playVariantChangeSound() {
+        var mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) return;
+        mc.level.playLocalSound(
+                mc.player.getX(), mc.player.getY(), mc.player.getZ(),
+                net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK.value(),
+                net.minecraft.sounds.SoundSource.PLAYERS,
+                0.3F, 1.5F, false
+        );
+    }
+
     // Parrot
     public static void setParrotVariant(Parrot.Variant variant) {
         currentParrotVariant = variant;
         Entity cached = MorphState.getCachedEntity();
         if (cached instanceof Parrot p) ((ParrotVariantAccessor) p).morphling$setVariant(variant);
+        playVariantChangeSound();
     }
     public static Parrot.Variant getParrotVariant() { return currentParrotVariant; }
 
@@ -67,6 +82,7 @@ public class MorphVariantManager {
         currentCatVariant = variant;
         Entity cached = MorphState.getCachedEntity();
         if (cached instanceof Cat c) ((CatVariantAccessor) c).morphling$setVariant(variant);
+        playVariantChangeSound();
     }
     public static Holder<CatVariant> getCatVariant() { return currentCatVariant; }
     public static List<Holder.Reference<CatVariant>> getCatVariantList() {
@@ -79,6 +95,7 @@ public class MorphVariantManager {
         currentWolfVariant = variant;
         Entity cached = MorphState.getCachedEntity();
         if (cached instanceof Wolf w) ((net.naw.morphling.mixin.accessors.WolfVariantAccessor) w).morphling$setVariant(variant);
+        playVariantChangeSound();
     }
     public static Holder<WolfVariant> getWolfVariant() { return currentWolfVariant; }
     public static List<Holder.Reference<WolfVariant>> getWolfVariantList() {
@@ -91,6 +108,7 @@ public class MorphVariantManager {
         currentCowVariant = variant;
         Entity cached = MorphState.getCachedEntity();
         if (cached instanceof Cow c) c.setVariant(variant);
+        playVariantChangeSound();
     }
     public static Holder<CowVariant> getCowVariant() { return currentCowVariant; }
     public static List<Holder.Reference<CowVariant>> getCowVariantList() {
@@ -103,6 +121,7 @@ public class MorphVariantManager {
         currentSheepColor = color;
         Entity cached = MorphState.getCachedEntity();
         if (cached instanceof Sheep s) s.setColor(color);
+        playVariantChangeSound();
     }
     public static net.minecraft.world.item.DyeColor getSheepColor() { return currentSheepColor; }
 }
