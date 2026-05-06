@@ -95,7 +95,7 @@ public class MorphState {
         AttributeInstance playerSpeed = player.getAttribute(Attributes.MOVEMENT_SPEED);
         AttributeInstance morphSpeed = livingMorph.getAttribute(Attributes.MOVEMENT_SPEED);
         if (playerSpeed != null && morphSpeed != null) {
-            double scaledSpeed = morphSpeed.getBaseValue() * 0.25;
+            double scaledSpeed = morphSpeed.getBaseValue() * (currentMorph == EntityType.DOLPHIN ? 0.08 : 0.25);
             playerSpeed.setBaseValue(scaledSpeed);
         }
 
@@ -188,6 +188,9 @@ public class MorphState {
             double baseScale = 0.25;
             if (currentMorph == EntityType.ENDERMAN) {
                 baseScale = EndermanMadMode.isActive() ? 0.5 : 0.3;
+            }
+            if (currentMorph == EntityType.DOLPHIN) {
+                baseScale = 0.08;
             }
             double scaledSpeed = morphSpeed.getBaseValue() * baseScale;
             if (player.isSprinting()) {
