@@ -33,6 +33,11 @@ public class MorphMenuScreen extends Screen {
     private static final int COLUMNS = 6;
     private static final int TOP_BAR_HEIGHT = 80;
 
+    // --- SCROLLBAR CONFIG ---
+    private static final int BOTTOM_PADDING = 40; // space reserved for the Close button
+    private static final int SCROLLBAR_WIDTH = 6;
+    private static final int SCROLLBAR_GAP = 4; // gap between grid and scrollbar
+
     private EntityType<?> variantViewMob = null; // null when not in variant view
 
     private enum Category {
@@ -78,6 +83,16 @@ public class MorphMenuScreen extends Screen {
     private static final int DRAWER_WIDTH = 260;
     private int drawerScroll = 0;
 
+    // --- SCROLLBAR STATE ---
+    private int scrollOffset = 0;       // current scroll position in pixels
+    private int contentHeight = 0;      // total height of all rows
+    private int viewportHeight = 0;     // visible area height
+    private int viewportTop = 0;        // top Y of the scrollable region
+    private int gridStartXCached = 0;   // cached for scrollbar X position
+    private int gridWidthCached = 0;
+    private boolean draggingScrollbar = false;
+    private double dragOffsetY = 0;     // mouse Y - thumb top, when drag started
+
     public MorphMenuScreen() {
         super(Component.literal("Morphling"));
     }
@@ -97,7 +112,7 @@ public class MorphMenuScreen extends Screen {
             int tabX = tabStartX + i * (tabWidth + 4);
             this.addRenderableWidget(Button.builder(
                     Component.literal(cat.label + (activeCategory == cat ? " •" : "")),
-                    btn -> { activeCategory = cat; rebuild(); }
+                    btn -> { activeCategory = cat; scrollOffset = 0; rebuild(); }
             ).bounds(tabX, tabY, tabWidth, tabHeight).build());
         }
 
@@ -107,7 +122,7 @@ public class MorphMenuScreen extends Screen {
                 Component.literal("Search mobs..."));
         this.searchBox.setHint(Component.literal("Search mobs..."));
         this.searchBox.setValue(this.searchQuery);
-        this.searchBox.setResponder(value -> { this.searchQuery = value.toLowerCase(); rebuildTiles(); });
+        this.searchBox.setResponder(value -> { this.searchQuery = value.toLowerCase(); scrollOffset = 0; rebuildTiles(); });
         this.addRenderableWidget(this.searchBox);
 
         int helpBtnSize = 20;
@@ -121,6 +136,16 @@ public class MorphMenuScreen extends Screen {
                 Component.literal(showBackground ? "●" : "○"),
                 btn -> { showBackground = !showBackground; btn.setMessage(Component.literal(showBackground ? "●" : "○")); }
         ).bounds(searchX + searchWidth + 6, tabY + tabHeight + 6, blurBtnSize, 18).build());
+
+        int twoHandsBtnSize = 20;
+        this.addRenderableWidget(Button.builder(
+                Component.literal(net.naw.morphling.client.config.TwoHandsConfig.isEnabled() ? "✋✋" : "✋"),
+                btn -> {
+                    boolean newVal = !net.naw.morphling.client.config.TwoHandsConfig.isEnabled();
+                    net.naw.morphling.client.config.TwoHandsConfig.setEnabled(newVal);
+                    btn.setMessage(Component.literal(newVal ? "✋✋" : "✋"));
+                }
+        ).bounds(searchX + searchWidth + 6 + blurBtnSize + 4, tabY + tabHeight + 6, twoHandsBtnSize, 18).build());
 
         int resetBtnWidth = 100;
         this.addRenderableWidget(Button.builder(
@@ -165,15 +190,44 @@ public class MorphMenuScreen extends Screen {
         int gridStartX = (this.width - gridWidth) / 2;
         int gridStartY = TOP_BAR_HEIGHT + 25;
 
+        // cache for scrollbar
+        this.gridStartXCached = gridStartX;
+        this.gridWidthCached = gridWidth;
+        this.viewportTop = gridStartY;
+        this.viewportHeight = this.height - BOTTOM_PADDING - viewportTop;
+
+        int rows = (filtered.size() + COLUMNS - 1) / COLUMNS;
+        this.contentHeight = rows == 0 ? 0 : rows * TILE_SIZE + (rows - 1) * TILE_SPACING;
+
+        // clamp scroll in case filter shrank the content
+        int maxScroll = Math.max(0, contentHeight - viewportHeight);
+        if (scrollOffset > maxScroll) scrollOffset = maxScroll;
+        if (scrollOffset < 0) scrollOffset = 0;
+
         for (int i = 0; i < filtered.size(); i++) {
             EntityRegistry.MorphEntry entry = filtered.get(i);
             int col = i % COLUMNS;
             int row = i / COLUMNS;
             int x = gridStartX + col * (TILE_SIZE + TILE_SPACING);
-            int y = gridStartY + row * (TILE_SIZE + TILE_SPACING);
+            int y = gridStartY + row * (TILE_SIZE + TILE_SPACING) - scrollOffset;
             MorphTile tile = new MorphTile(x, y, TILE_SIZE, entry, this);
             this.tiles.add(tile);
             this.addRenderableWidget(tile);
+        }
+    }
+
+    /**
+     * Repositions existing tiles based on current scrollOffset without recreating them.
+     * Avoids rebuilding entity previews every scroll tick.
+     */
+    private void repositionTiles() {
+        int gridStartY = viewportTop;
+        for (int i = 0; i < tiles.size(); i++) {
+            int col = i % COLUMNS;
+            int row = i / COLUMNS;
+            int x = gridStartXCached + col * (TILE_SIZE + TILE_SPACING);
+            int y = gridStartY + row * (TILE_SIZE + TILE_SPACING) - scrollOffset;
+            tiles.get(i).setPosition(x, y);
         }
     }
 
@@ -208,6 +262,14 @@ public class MorphMenuScreen extends Screen {
         return result;
     }
 
+    private boolean needsScrollbar() {
+        return variantViewMob == null && contentHeight > viewportHeight;
+    }
+
+    private int getMaxScroll() {
+        return Math.max(0, contentHeight - viewportHeight);
+    }
+
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         float target = helpDrawerOpen ? 1F : 0F;
@@ -215,6 +277,7 @@ public class MorphMenuScreen extends Screen {
         drawerSlide += Math.signum(diff) * Math.min(Math.abs(diff), 0.15F);
 
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+
         graphics.centeredText(this.font, this.title, this.width / 2, 20, 0xFFFFFF);
 
         if (MorphState.isMorphed()) {
@@ -233,9 +296,33 @@ public class MorphMenuScreen extends Screen {
             PlayerFaceExtractor.extractRenderState(graphics, skin.body().texturePath(), headX, headY, headSize, true, false, -1);
         }
 
+        // draw scrollbar on top of everything (but under drawer)
+        if (needsScrollbar()) {
+            renderScrollbar(graphics, mouseX, mouseY);
+        }
+
         if (drawerSlide > 0.001F) {
             renderHelpDrawer(graphics, mouseX, mouseY);
         }
+    }
+
+    private void renderScrollbar(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+        int trackX = gridStartXCached + gridWidthCached + SCROLLBAR_GAP;
+        int trackY = viewportTop;
+        int trackH = viewportHeight;
+
+        // track background
+        graphics.fill(trackX, trackY, trackX + SCROLLBAR_WIDTH, trackY + trackH, 0x66000000);
+
+        // thumb size proportional to viewport/content ratio
+        int thumbH = Math.max(16, (int)((float) viewportHeight / contentHeight * trackH));
+        int maxScroll = getMaxScroll();
+        int thumbY = maxScroll == 0 ? trackY : trackY + (int)((float) scrollOffset / maxScroll * (trackH - thumbH));
+
+        boolean thumbHovered = mouseX >= trackX && mouseX < trackX + SCROLLBAR_WIDTH
+                && mouseY >= thumbY && mouseY < thumbY + thumbH;
+        int thumbColor = (draggingScrollbar || thumbHovered) ? 0xFFAAAAAA : 0xFF777777;
+        graphics.fill(trackX, thumbY, trackX + SCROLLBAR_WIDTH, thumbY + thumbH, thumbColor);
     }
 
     private void renderHelpDrawer(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
@@ -276,6 +363,7 @@ public class MorphMenuScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        // drawer scrolling first
         if (helpDrawerOpen && mouseX >= this.width - DRAWER_WIDTH) {
             drawerScroll -= (int)(scrollY * 15);
             if (drawerScroll < 0) drawerScroll = 0;
@@ -290,6 +378,18 @@ public class MorphMenuScreen extends Screen {
             if (drawerScroll > maxScroll) drawerScroll = maxScroll;
             return true;
         }
+
+        // grid scrolling — works anywhere over the viewport
+        if (needsScrollbar()
+                && mouseY >= viewportTop && mouseY < viewportTop + viewportHeight) {
+            scrollOffset -= (int)(scrollY * 20);
+            int maxScroll = getMaxScroll();
+            if (scrollOffset < 0) scrollOffset = 0;
+            if (scrollOffset > maxScroll) scrollOffset = maxScroll;
+            repositionTiles();
+            return true;
+        }
+
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
@@ -323,7 +423,67 @@ public class MorphMenuScreen extends Screen {
                 return true;
             }
         }
+
+        // scrollbar drag start
+        if (needsScrollbar()) {
+            int trackX = gridStartXCached + gridWidthCached + SCROLLBAR_GAP;
+            int trackY = viewportTop;
+            int trackH = viewportHeight;
+            int thumbH = Math.max(16, (int)((float) viewportHeight / contentHeight * trackH));
+            int maxScroll = getMaxScroll();
+            int thumbY = maxScroll == 0 ? trackY : trackY + (int)((float) scrollOffset / maxScroll * (trackH - thumbH));
+
+            double mx = event.x();
+            double my = event.y();
+            if (mx >= trackX && mx < trackX + SCROLLBAR_WIDTH && my >= trackY && my < trackY + trackH) {
+                if (my >= thumbY && my < thumbY + thumbH) {
+                    // grab the thumb
+                    draggingScrollbar = true;
+                    dragOffsetY = my - thumbY;
+                } else {
+                    // click on track — jump thumb to that position
+                    draggingScrollbar = true;
+                    dragOffsetY = thumbH / 2.0;
+                    updateScrollFromMouse(my, thumbH, trackY, trackH);
+                    repositionTiles();
+                }
+                return true;
+            }
+        }
+
         return super.mouseClicked(event, doubleClick);
+    }
+
+    @Override
+    public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event) {
+        if (draggingScrollbar) {
+            draggingScrollbar = false;
+            return true;
+        }
+        return super.mouseReleased(event);
+    }
+
+    @Override
+    public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent event, double deltaX, double deltaY) {
+        if (draggingScrollbar && needsScrollbar()) {
+            int trackY = viewportTop;
+            int trackH = viewportHeight;
+            int thumbH = Math.max(16, (int)((float) viewportHeight / contentHeight * trackH));
+            updateScrollFromMouse(event.y(), thumbH, trackY, trackH);
+            repositionTiles();
+            return true;
+        }
+        return super.mouseDragged(event, deltaX, deltaY);
+    }
+
+    private void updateScrollFromMouse(double mouseY, int thumbH, int trackY, int trackH) {
+        double thumbTop = mouseY - dragOffsetY;
+        double trackRange = trackH - thumbH;
+        if (trackRange <= 0) return;
+        double ratio = (thumbTop - trackY) / trackRange;
+        if (ratio < 0) ratio = 0;
+        if (ratio > 1) ratio = 1;
+        scrollOffset = (int)(ratio * getMaxScroll());
     }
 
     public static class MorphTile extends AbstractWidget {
@@ -354,6 +514,29 @@ public class MorphMenuScreen extends Screen {
 
         @Override
         protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            // Skip rendering entirely if tile is fully outside the viewport (perf + clean look)
+            if (getY() + height < screen.viewportTop || getY() > screen.viewportTop + screen.viewportHeight) {
+                return;
+            }
+
+            // Clip drawing to the viewport vertical bounds so partially-visible tiles
+            // cleanly cut off at the top/bottom edges instead of bleeding over the
+            // search bar / close button.
+            boolean clip = getY() < screen.viewportTop || getY() + height > screen.viewportTop + screen.viewportHeight;
+            if (clip) {
+                graphics.enableScissor(getX(), screen.viewportTop, getX() + width, screen.viewportTop + screen.viewportHeight);
+            }
+
+            try {
+                renderTileContent(graphics, mouseX, mouseY, partialTick);
+            } finally {
+                if (clip) {
+                    graphics.disableScissor();
+                }
+            }
+        }
+
+        private void renderTileContent(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
             boolean isCurrent = MorphState.getCurrentMorph() == entry.type();
             boolean hovered = this.isHovered();
 
