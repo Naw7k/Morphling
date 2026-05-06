@@ -20,6 +20,10 @@ public class IronGolemAbility {
         golem.offerFlower(offeringFlower);
     }
 
+    public static boolean isOfferingFlower() {
+        return offeringFlower;
+    }
+
     private static boolean checkReady(Minecraft client) {
         if (MorphState.getCurrentMorph() != EntityType.IRON_GOLEM) return false;
         if (client.player == null) return false;
