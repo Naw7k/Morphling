@@ -51,8 +51,12 @@ public class HandPlacementDebugScreen extends Screen {
             ).bounds(x, y, btnWidth, 20).build());
         }
 
+        // Place axis sliders below the last mob-button row.
+        // Last row's bottom edge = 30 + (rows - 1) * 24 + 20.
+        int mobRowsBottom = 30 + (rows - 1) * 24 + 20;
+        int sliderY = mobRowsBottom + 12;
+
         // X / Y / Z adjustment buttons
-        int sliderY = 80;
         addAxisButtons("X", sliderY, true);
         addAxisButtons("Y", sliderY + 30, false);
         addAxisButtons("Z", sliderY + 60, false);
@@ -122,20 +126,28 @@ public class HandPlacementDebugScreen extends Screen {
 
         int centerX = this.width / 2;
 
-        // X row — value between the +/- buttons (around y=86)
+        // Recompute slider Y the same way init() does so the value labels line up
+        EntityType<?>[] mobs = HandPlacementConfig.getTunableMobs();
+        int perRow = 6;
+        int rows = (mobs.length + perRow - 1) / perRow;
+        int mobRowsBottom = 30 + (rows - 1) * 24 + 20;
+        int sliderY = mobRowsBottom + 12;
+        int textOffset = 6; // matches the original 80 -> 86 offset
+
+        // X row
         Component xLine = Component.literal(String.format("X: %.3f", o.x));
         int xWidth = this.font.width(xLine);
-        graphics.text(this.font, xLine, centerX - xWidth / 2, 86, 0xFFFFFFFF, false);
+        graphics.text(this.font, xLine, centerX - xWidth / 2, sliderY + textOffset, 0xFFFFFFFF, false);
 
         // Y row
         Component yLine = Component.literal(String.format("Y: %.3f", o.y));
         int yWidth = this.font.width(yLine);
-        graphics.text(this.font, yLine, centerX - yWidth / 2, 116, 0xFFFFFFFF, false);
+        graphics.text(this.font, yLine, centerX - yWidth / 2, sliderY + 30 + textOffset, 0xFFFFFFFF, false);
 
         // Z row
         Component zLine = Component.literal(String.format("Z: %.3f", o.z));
         int zWidth = this.font.width(zLine);
-        graphics.text(this.font, zLine, centerX - zWidth / 2, 146, 0xFFFFFFFF, false);
+        graphics.text(this.font, zLine, centerX - zWidth / 2, sliderY + 60 + textOffset, 0xFFFFFFFF, false);
     }
 
     @Override
