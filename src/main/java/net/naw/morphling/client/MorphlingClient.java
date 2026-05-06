@@ -49,6 +49,8 @@ public class MorphlingClient implements ClientModInitializer {
     public void onInitializeClient() {
 
         HandPlacementConfig.loadFromFile();
+        net.naw.morphling.client.config.TwoHandsConfig.loadFromFile();
+
 
         ClientPlayNetworking.registerGlobalReceiver(MorphlingNetworking.HandshakePayload.TYPE, (payload, context) -> {
             MultiplayerCheck.serverHasMorphling = true;
@@ -227,6 +229,10 @@ public class MorphlingClient implements ClientModInitializer {
                     DolphinAbility.doSplashJump();
                 }
 
+                else if (MorphState.getCurrentMorph() == EntityType.CHICKEN) {
+                    ChickenAbility.layEgg(client);
+                }
+
                 else {
                     MobAbilities.trigger(client);
                 }
@@ -269,6 +275,8 @@ public class MorphlingClient implements ClientModInitializer {
     private static void tickFlapAnimations(Minecraft client) {
         if (!MorphState.isMorphed()) return;
         if (client.player == null) return;
+        if (client.isPaused()) return;
+
         var morph = MorphState.getCachedEntity();
         if (morph == null) return;
 
