@@ -22,7 +22,7 @@ public class MorphTransition {
         ticksRemaining = TRANSITION_TICKS;
 
         // Initial burst of particles
-        spawnParticles(player, level, 1);
+        spawnParticles(player, level);
 
         // Morph sound
         level.playLocalSound(
@@ -42,22 +42,13 @@ public class MorphTransition {
         if (player == null || level == null) return;
 
         // Continuous particle spawn during transition
-        spawnParticles(player, level, 1);
+        spawnParticles(player, level);
 
     }
 
-    public static boolean isActive() {
-        return ticksRemaining > 0;
-    }
-
-    /** 0.0 at end, 1.0 at start — useful for scaling visuals. */
-    public static float getProgress() {
-        return (float) ticksRemaining / TRANSITION_TICKS;
-    }
-
-    private static void spawnParticles(Player player, Level level, int count) {
+    private static void spawnParticles(Player player, Level level) {
         RandomSource rng = player.getRandom();
-        for (int i = 0; i < count; i++) {
+        for (int i = 0; i < 1; i++) {
             double ox = (rng.nextDouble() - 0.5) * player.getBbWidth() * 2;
             double oy = rng.nextDouble() * player.getBbHeight();
             double oz = (rng.nextDouble() - 0.5) * player.getBbWidth() * 2;
