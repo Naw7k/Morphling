@@ -10,17 +10,13 @@ import net.naw.morphling.client.core.MorphState;
 
 public class CreeperAbility {
 
-    private static final int SWELL_TICKS = 30; // ~1.5 seconds
+    private static final int SWELL_TICKS = 30;
     private static int tickCounter = 0;
     private static boolean wasPressed = false;
 
-    /**
-     * Called every tick — handles press/hold/release logic for the swell.
-     */
     public static void tick(Minecraft client) {
         if (client.player == null) return;
 
-        // Only tick if morphed as creeper
         if (!MorphState.isMorphed() ||
                 MorphState.getCurrentMorph() != net.minecraft.world.entity.EntityType.CREEPER) {
             tickCounter = 0;
@@ -40,15 +36,25 @@ public class CreeperAbility {
                             SoundSource.PLAYERS,
                             1.0F, 0.5F, false
                     );
+                    MorphState.broadcastSound(SoundEvents.CREEPER_PRIMED, 1.0F, 0.5F);
                 }
             }
 
             tickCounter++;
+
+            if (tickCounter % 3 == 0) {
+                MorphState.sendAbilityState("creeper_swell", String.valueOf(getSwellProgress()));
+            }
+
             if (tickCounter >= SWELL_TICKS) {
                 explode(client);
                 tickCounter = 0;
+                MorphState.sendAbilityState("creeper_swell", "0.0");
             }
         } else {
+            if (tickCounter > 0) {
+                MorphState.sendAbilityState("creeper_swell", "0.0");
+            }
             tickCounter = 0;
         }
 
@@ -66,20 +72,17 @@ public class CreeperAbility {
                 if (serverPlayer != null) {
                     serverPlayer.level().explode(
                             serverPlayer,
-                            serverPlayer.getX(),
-                            serverPlayer.getY(),
-                            serverPlayer.getZ(),
-                            3.0F,
-                            Level.ExplosionInteraction.MOB
+                            serverPlayer.getX(), serverPlayer.getY(), serverPlayer.getZ(),
+                            3.0F, Level.ExplosionInteraction.MOB
                     );
                 }
             });
+        } else {
+            MorphState.sendAbilityAction("creeper_explode", "");
         }
     }
 
-    /** For the renderer to drive the swell visual (0.0 - 1.0). */
     public static float getSwellProgress() {
         return (float) tickCounter / SWELL_TICKS;
     }
-
 }

@@ -1,7 +1,6 @@
 package net.naw.morphling.client.compat;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.world.entity.Entity;
 
 public class FpmCompat {
@@ -10,7 +9,7 @@ public class FpmCompat {
         // No-op — head hiding now handled by per-model mixins
     }
 
-    public static void hideHeadIfNeeded(Entity morphEntity, LivingEntityRenderState state) {
+    public static void hideHeadIfNeeded() {
         // No-op — head hiding now handled by per-model mixins
     }
 

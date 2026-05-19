@@ -11,6 +11,7 @@ import java.util.Map;
 
 public class MorphStepSounds {
     private static final Map<EntityType<?>, SoundEvent> STEP_SOUNDS = new HashMap<>();
+    private static final Map<EntityType<?>, SoundEvent> GALLOP_SOUNDS = new HashMap<>();
     private static final Map<EntityType<?>, Float> STEP_VOLUMES = new HashMap<>();
 
     static {
@@ -23,6 +24,10 @@ public class MorphStepSounds {
         STEP_SOUNDS.put(EntityType.ZOMBIE_VILLAGER, SoundEvents.ZOMBIE_VILLAGER_STEP);
         STEP_SOUNDS.put(EntityType.SKELETON, SoundEvents.SKELETON_STEP);
         STEP_SOUNDS.put(EntityType.IRON_GOLEM, SoundEvents.IRON_GOLEM_STEP);
+        STEP_SOUNDS.put(EntityType.SPIDER, SoundEvents.SPIDER_STEP);
+
+        // Horse gallop plays when sprinting instead of regular step
+        GALLOP_SOUNDS.put(EntityType.HORSE, SoundEvents.HORSE_GALLOP);
 
         // Per-mob volume overrides — anything not listed uses the default (0.15F)
         STEP_VOLUMES.put(EntityType.IRON_GOLEM, 1.0F);
@@ -41,10 +46,19 @@ public class MorphStepSounds {
 
         // Cow's step sound lives in its sound variant
         if (morphEntity instanceof net.minecraft.world.entity.animal.cow.Cow cow) {
-            return ((CowSoundAccessor)(Object) cow).morphling$getSoundSet().stepSound().value();
+            return ((CowSoundAccessor) cow).morphling$getSoundSet().stepSound().value();
         }
 
         return null;
+    }
+
+    /**
+     * Get gallop sound for a morph — played when sprinting instead of regular step.
+     * Returns null if the mob has no gallop sound.
+     */
+    public static SoundEvent getGallopSound(Entity morphEntity) {
+        if (morphEntity == null) return null;
+        return GALLOP_SOUNDS.getOrDefault(morphEntity.getType(), null);
     }
 
     /**

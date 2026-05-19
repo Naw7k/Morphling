@@ -48,6 +48,8 @@ public class HandPlacementConfig {
         OFFSETS.put(EntityType.DOLPHIN,    new Offset(-0.350F, 0.100F, -0.500F));
         OFFSETS.put(EntityType.CHICKEN,    new Offset(-0.250F, -0.550F, 0.150F));
         OFFSETS.put(EntityType.PARROT,     new Offset(-0.400F, -0.800F, 0.100F));
+        OFFSETS.put(EntityType.HORSE,      new Offset(-0.200F, -0.800F, 0.300F));
+        OFFSETS.put(EntityType.VILLAGER,   new Offset(-0.300F, -0.700F, 0.000F));
 
 
         // FA
@@ -64,6 +66,11 @@ public class HandPlacementConfig {
         FA_OFFSETS.put(EntityType.DOLPHIN,    new Offset(0.000F, 0.500F, 0.500F));
         FA_OFFSETS.put(EntityType.CHICKEN,    new Offset(0.000F, 0.000F, 0.000F));
         FA_OFFSETS.put(EntityType.PARROT,     new Offset(0.000F, 0.000F, 0.000F));
+
+
+                                //  LATER
+        FA_OFFSETS.put(EntityType.HORSE,      new Offset(-0.000F, -0.000F, 0.000F));
+        FA_OFFSETS.put(EntityType.VILLAGER, new Offset(0.000F, 0.000F, 0.000F));
 
     }
 
@@ -87,6 +94,9 @@ public class HandPlacementConfig {
         if (type == EntityType.DOLPHIN)    return new Offset(-0.350F, 0.100F, -0.500F);
         if (type == EntityType.CHICKEN)    return new Offset(-0.250F, -0.550F, 0.150F);
         if (type == EntityType.PARROT)     return new Offset(-0.400F, -0.800F, 0.100F);
+
+        if (type == EntityType.HORSE)      return new Offset(-0.200F, -0.800F, 0.300F);
+        if (type == EntityType.VILLAGER)   return new Offset(-0.300F, -0.700F, 0.000F);
         if (isHumanoid(type))              return new Offset(0.000F, 0.000F, 0.000F);
         return new Offset(0.000F, -0.350F, 0.500F);
     }
@@ -104,6 +114,9 @@ public class HandPlacementConfig {
         if (type == EntityType.IRON_GOLEM) return new Offset(0.000F, 0.000F, 0.000F);
         if (type == EntityType.CHICKEN)    return new Offset(0.000F, 0.000F, 0.000F);
         if (type == EntityType.PARROT)     return new Offset(0.000F, 0.000F, 0.000F);
+
+        if (type == EntityType.HORSE)      return new Offset(-0.000F, -0.000F, 0.000F);
+        if (type == EntityType.VILLAGER)   return new Offset(0.000F, 0.000F, 0.000F);
         return new Offset(0.000F, 0.500F, 0.500F);
     }
 
@@ -121,7 +134,7 @@ public class HandPlacementConfig {
         Map<EntityType<?>, Offset> active = faActive ? FA_OFFSETS : OFFSETS;
         Offset fallback = isHumanoid(type) ? DEFAULT_HUMANOID
                 : (faActive ? new Offset(0.0F, 0.5F, 0.5F) : DEFAULT_QUADRUPED);
-        return active.computeIfAbsent(type, t -> new Offset(fallback.x, fallback.y, fallback.z));
+        return active.computeIfAbsent(type, _ -> new Offset(fallback.x, fallback.y, fallback.z));
     }
 
     public static EntityType<?>[] getTunableMobs() {
@@ -129,7 +142,7 @@ public class HandPlacementConfig {
                 EntityType.PIG, EntityType.COW, EntityType.SHEEP,
                 EntityType.WOLF, EntityType.CAT, EntityType.CREEPER,
                 EntityType.ZOMBIE, EntityType.SKELETON, EntityType.ENDERMAN, EntityType.IRON_GOLEM,
-                EntityType.DOLPHIN, EntityType.CHICKEN, EntityType.PARROT
+                EntityType.DOLPHIN, EntityType.CHICKEN, EntityType.PARROT, EntityType.HORSE, EntityType.VILLAGER
         };
     }
 

@@ -5,14 +5,15 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.player.Player;
-import net.naw.morphling.client.abilities.EndermanMadMode;
 
 public class EndermanStareSound extends AbstractTickableSoundInstance {
     private final Player player;
+    private final java.util.function.BooleanSupplier activeCheck;
 
-    public EndermanStareSound(Player player) {
+    public EndermanStareSound(Player player, java.util.function.BooleanSupplier activeCheck) {
         super(SoundEvents.ENDERMAN_STARE, SoundSource.PLAYERS, RandomSource.create());
         this.player = player;
+        this.activeCheck = activeCheck;
         this.looping = false;
         this.delay = 0;
         this.volume = 2.5F;
@@ -24,12 +25,10 @@ public class EndermanStareSound extends AbstractTickableSoundInstance {
 
     @Override
     public void tick() {
-        // Stop immediately if mad mode is off or player gone
-        if (player.isRemoved() || !EndermanMadMode.isActive()) {
+        if (player.isRemoved() || !activeCheck.getAsBoolean()) {
             this.stop();
             return;
         }
-        // Follow the player
         this.x = player.getX();
         this.y = player.getY();
         this.z = player.getZ();

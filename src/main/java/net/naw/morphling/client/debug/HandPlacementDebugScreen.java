@@ -6,6 +6,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.EntityType;
 import net.naw.morphling.client.config.HandPlacementConfig;
+import org.jspecify.annotations.NonNull;
 
 public class HandPlacementDebugScreen extends Screen {
 
@@ -44,7 +45,7 @@ public class HandPlacementDebugScreen extends Screen {
 
             this.addRenderableWidget(Button.builder(
                     label,
-                    btn -> {
+                    _ -> {
                         selectedMob = mob;
                         rebuild();
                     }
@@ -57,36 +58,41 @@ public class HandPlacementDebugScreen extends Screen {
         int sliderY = mobRowsBottom + 12;
 
         // X / Y / Z adjustment buttons
-        addAxisButtons("X", sliderY, true);
-        addAxisButtons("Y", sliderY + 30, false);
-        addAxisButtons("Z", sliderY + 60, false);
+        addAxisButtons("X", sliderY);
+        addAxisButtons("Y", sliderY + 30);
+        addAxisButtons("Z", sliderY + 60);
 
         // Reset to defaults button
         this.addRenderableWidget(Button.builder(
                 Component.literal("Reset This Mob"),
-                btn -> HandPlacementConfig.resetToDefault(selectedMob)
+                _ -> HandPlacementConfig.resetToDefault(selectedMob)
         ).bounds(this.width / 2 - 50, sliderY + 100, 100, 20).build());
 
-        // Close
+        // Close/Back
         this.addRenderableWidget(Button.builder(
-                Component.literal("Close"),
-                btn -> this.onClose()
-        ).bounds(this.width / 2 - 40, this.height - 28, 80, 20).build());
+                Component.literal("← Back"),
+                _ -> net.minecraft.client.Minecraft.getInstance().setScreen(new DebugScreen())
+        ).bounds(this.width / 2 - 82, this.height - 28, 80, 20).build());
+
+        this.addRenderableWidget(Button.builder(
+                Component.literal("× Close"),
+                _ -> this.onClose()
+        ).bounds(this.width / 2 + 2, this.height - 28, 80, 20).build());
     }
 
-    private void addAxisButtons(String axis, int y, boolean isX) {
+    private void addAxisButtons(String axis, int y) {
         int centerX = this.width / 2;
 
         // - button
         this.addRenderableWidget(Button.builder(
                 Component.literal("-"),
-                btn -> adjust(axis, -STEP)
+                _ -> adjust(axis, -STEP)
         ).bounds(centerX - 80, y, 30, 20).build());
 
         // + button
         this.addRenderableWidget(Button.builder(
                 Component.literal("+"),
-                btn -> adjust(axis, STEP)
+                _ -> adjust(axis, STEP)
         ).bounds(centerX + 50, y, 30, 20).build());
     }
 
@@ -106,7 +112,7 @@ public class HandPlacementDebugScreen extends Screen {
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
 
         // FA indicator at top-right corner
@@ -151,7 +157,7 @@ public class HandPlacementDebugScreen extends Screen {
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    public void extractBackground(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         // No blur, no dim — see through to game
     }
 

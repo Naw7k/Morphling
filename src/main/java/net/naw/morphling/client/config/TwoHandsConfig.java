@@ -17,20 +17,13 @@ import java.util.Set;
  * Two-hands feature config.
  * - "enabled" toggle persisted to disk (default OFF)
  * - Hardcoded per-morph offsets (NOT tunable in the hand placement menu)
- *
+
  * Only morphs in TWO_HAND_MORPHS get the second hand rendered.
  */
+@SuppressWarnings("BooleanMethodIsAlwaysInverted")
 public class TwoHandsConfig {
 
-    public static class Offset {
-        public final float x;
-        public final float y;
-        public final float z;
-        public Offset(float x, float y, float z) {
-            this.x = x;
-            this.y = y;
-            this.z = z;
-        }
+    public record Offset(float x, float y, float z) {
     }
 
     private static final Map<EntityType<?>, Offset> OFFSETS = new HashMap<>();

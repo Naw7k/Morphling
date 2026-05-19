@@ -6,6 +6,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.animal.feline.Cat;
 import net.naw.morphling.client.core.MorphState;
 
+@SuppressWarnings("BooleanMethodIsAlwaysInverted")
 public class CatAbility {
 
     private static long lastActionTime = 0L;
@@ -19,18 +20,21 @@ public class CatAbility {
         if (!checkReady(client)) return;
         currentPose = (currentPose == Pose.SIT) ? Pose.STAND : Pose.SIT;
         applyPose();
+        MorphState.sendAbilityState("cat_pose", currentPose.name());
     }
 
     public static void toggleLying(Minecraft client) {
         if (!checkReady(client)) return;
         currentPose = (currentPose == Pose.LYING) ? Pose.STAND : Pose.LYING;
         applyPose();
+        MorphState.sendAbilityState("cat_pose", currentPose.name());
     }
 
     public static void toggleRelaxed(Minecraft client) {
         if (!checkReady(client)) return;
         currentPose = (currentPose == Pose.RELAXED) ? Pose.STAND : Pose.RELAXED;
         applyPose();
+        MorphState.sendAbilityState("cat_pose", currentPose.name());
     }
 
     public static void playHiss(Minecraft client) {
@@ -68,12 +72,12 @@ public class CatAbility {
         if (!(MorphState.getCachedEntity() instanceof Cat cat)) return;
         cat.setInSittingPose(false);
         cat.setLying(false);
-        ((net.naw.morphling.mixin.accessors.CatRelaxAccessor)(Object) cat).morphling$setRelaxStateOne(false);
+        ((net.naw.morphling.mixin.accessors.CatRelaxAccessor) cat).morphling$setRelaxStateOne(false);
 
         switch (currentPose) {
             case SIT -> cat.setInSittingPose(true);
             case LYING -> cat.setLying(true);
-            case RELAXED -> ((net.naw.morphling.mixin.accessors.CatRelaxAccessor)(Object) cat).morphling$setRelaxStateOne(true);
+            case RELAXED -> ((net.naw.morphling.mixin.accessors.CatRelaxAccessor) cat).morphling$setRelaxStateOne(true);
             case STAND -> { }
         }
     }
@@ -92,13 +96,14 @@ public class CatAbility {
             if (speedSqr > 0.001) {
                 currentPose = Pose.STAND;
                 applyPose();
+                MorphState.sendAbilityState("cat_pose", "STAND");
                 return;
             }
         }
 
         // Only call the lie-down animation update — NOT full tick (no AI = no drift)
         try {
-            ((net.naw.morphling.mixin.accessors.CatTickAccessor)(Object) cat).morphling$handleLieDown();
+            ((net.naw.morphling.mixin.accessors.CatTickAccessor) cat).morphling$handleLieDown();
         } catch (Exception ignored) {}
     }
 }

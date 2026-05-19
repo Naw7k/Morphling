@@ -15,6 +15,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.naw.morphling.client.core.MorphState;
+import net.minecraft.core.registries.BuiltInRegistries;
 
 public class EndermanCarryAbility {
 
@@ -25,7 +26,6 @@ public class EndermanCarryAbility {
         if (MorphState.getCurrentMorph() != EntityType.ENDERMAN) return;
         if (client.player == null || client.level == null) return;
 
-        // Cooldown to prevent spam
         long now = System.currentTimeMillis();
         if (now - lastActionTime < ACTION_COOLDOWN_MS) return;
         lastActionTime = now;
@@ -38,16 +38,13 @@ public class EndermanCarryAbility {
         BlockState carried = enderman.getCarriedBlock();
 
         if (carried == null) {
-            // Not carrying — try to pick up a block
             tryPickup(client, player, level, enderman);
         } else {
-            // Carrying — try to place the block
             tryPlace(client, player, level, enderman, carried);
         }
     }
 
     private static void tryPickup(Minecraft client, Player player, Level level, EnderMan enderman) {
-        // Raycast up to 4 blocks away from where player is looking
         Vec3 eyePos = player.getEyePosition();
         Vec3 lookVec = player.getLookAngle();
         Vec3 endPos = eyePos.add(lookVec.scale(4.0));
@@ -64,13 +61,14 @@ public class EndermanCarryAbility {
         BlockPos pos = hit.getBlockPos();
         BlockState state = level.getBlockState(pos);
 
-        // Only pickup holdable blocks (same rule as vanilla enderman)
         if (!state.is(BlockTags.ENDERMAN_HOLDABLE)) return;
 
-        // Set carried block on the cached enderman (triggers visual via vanilla renderer)
         enderman.setCarriedBlock(state);
 
-        // Remove block from world (server-side)
+        // Sync carried block to other players
+        String blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+        MorphState.sendAbilityState("enderman_carried", blockId);
+
         var server = client.getSingleplayerServer();
         if (server != null) {
             server.execute(() -> {
@@ -79,18 +77,16 @@ public class EndermanCarryAbility {
                     serverPlayer.level().destroyBlock(pos, false);
                 }
             });
+        } else {
+            MorphState.sendAbilityAction("enderman_pickup",
+                    pos.getX() + "," + pos.getY() + "," + pos.getZ());
         }
 
-        // Sound feedback
-        level.playLocalSound(
-                player.getX(), player.getY(), player.getZ(),
-                SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS,
-                0.5F, 1.2F, false
-        );
+        level.playLocalSound(player.getX(), player.getY(), player.getZ(),
+                SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.5F, 1.2F, false);
     }
 
     private static void tryPlace(Minecraft client, Player player, Level level, EnderMan enderman, BlockState carried) {
-        // Raycast to find where to place
         Vec3 eyePos = player.getEyePosition();
         Vec3 lookVec = player.getLookAngle();
         Vec3 endPos = eyePos.add(lookVec.scale(4.0));
@@ -106,20 +102,15 @@ public class EndermanCarryAbility {
         if (hit.getType() == HitResult.Type.BLOCK) {
             placePos = hit.getBlockPos().relative(hit.getDirection());
         } else {
-            // No block hit — place at end of look
             placePos = BlockPos.containing(endPos);
         }
 
-        // Check that target spot is empty
         if (!level.getBlockState(placePos).isAir()) return;
-
-        // Don't place inside player
         if (placePos.equals(player.blockPosition()) || placePos.equals(player.blockPosition().above())) return;
 
         final BlockPos finalPos = placePos;
         final BlockState toPlace = carried;
 
-        // Place block server-side
         var server = client.getSingleplayerServer();
         if (server != null) {
             server.execute(() -> {
@@ -128,15 +119,18 @@ public class EndermanCarryAbility {
                     serverPlayer.level().setBlock(finalPos, toPlace, 3);
                 }
             });
+        } else {
+            String blockId = BuiltInRegistries.BLOCK.getKey(toPlace.getBlock()).toString();
+            MorphState.sendAbilityAction("enderman_place",
+                    finalPos.getX() + "," + finalPos.getY() + "," + finalPos.getZ() + "," + blockId);
         }
 
-        // Clear carried state
         enderman.setCarriedBlock(null);
 
-        level.playLocalSound(
-                player.getX(), player.getY(), player.getZ(),
-                SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS,
-                0.5F, 0.8F, false
-        );
+        // Sync cleared carried block
+        MorphState.sendAbilityState("enderman_carried", "");
+
+        level.playLocalSound(player.getX(), player.getY(), player.getZ(),
+                SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.5F, 0.8F, false);
     }
 }

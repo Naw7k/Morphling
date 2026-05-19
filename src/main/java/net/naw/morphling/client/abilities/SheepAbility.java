@@ -19,10 +19,6 @@ public class SheepAbility {
     private static final int EAT_DURATION_TICKS = 40;
     private static BlockPos pendingGrassPos = null;
 
-    public static boolean isEating() {
-        return eatTicksRemaining > 0 && MorphState.getCurrentMorph() == EntityType.SHEEP;
-    }
-
     public static void trigger(Minecraft client) {
         if (MorphState.getCurrentMorph() != EntityType.SHEEP) return;
         if (client.player == null || client.level == null) return;
@@ -32,6 +28,7 @@ public class SheepAbility {
         lastEatTime = now;
 
         eatTicksRemaining = EAT_DURATION_TICKS;
+        MorphState.sendAbilityState("sheep_eating", "true");
 
         if (MorphState.getCachedEntity() instanceof Sheep sheep) {
             sheep.handleEntityEvent((byte) 10);
@@ -43,7 +40,6 @@ public class SheepAbility {
                 0.5F, 1.0F, false
         );
 
-        // Remember the grass below for later consumption
         BlockPos below = client.player.blockPosition().below();
         if (client.level.getBlockState(below).is(Blocks.GRASS_BLOCK)) {
             pendingGrassPos = below;
@@ -63,7 +59,7 @@ public class SheepAbility {
         eatTicksRemaining--;
 
         if (MorphState.getCachedEntity() instanceof Sheep sheep) {
-            var accessor = (net.naw.morphling.mixin.accessors.SheepEatAccessor)(Object) sheep;
+            var accessor = (net.naw.morphling.mixin.accessors.SheepEatAccessor) sheep;
             int current = accessor.morphling$getEatAnimationTick();
             if (current > 0) {
                 accessor.morphling$setEatAnimationTick(current - 1);
@@ -82,10 +78,11 @@ public class SheepAbility {
                         sp.heal(0.5F);
                     }
                 });
+            } else {
+                MorphState.sendAbilityAction("sheep_heal", "");
             }
         }
 
-        // Restore a tiny bit of hunger
         if (eatTicksRemaining % 50 == 0) {
             var server = client.getSingleplayerServer();
             if (server != null) {
@@ -96,22 +93,28 @@ public class SheepAbility {
                         food.setFoodLevel(Math.min(food.getFoodLevel() + 1, 20));
                     }
                 });
+            } else {
+                MorphState.sendAbilityAction("sheep_hunger", "");
             }
         }
 
-        // On animation complete — turn grass to dirt
-        if (eatTicksRemaining == 0 && pendingGrassPos != null) {
-            final BlockPos pos = pendingGrassPos;
-            pendingGrassPos = null;
-            var server = client.getSingleplayerServer();
-            if (server != null) {
-                server.execute(() -> {
-                    var sp = server.getPlayerList().getPlayer(player.getUUID());
-                    if (sp != null && sp.level().getBlockState(pos).is(Blocks.GRASS_BLOCK)) {
-                        sp.level().setBlock(pos, Blocks.DIRT.defaultBlockState(), 3);
-                        sp.level().levelEvent(2001, pos, Block.getId(Blocks.GRASS_BLOCK.defaultBlockState()));
-                    }
-                });
+        if (eatTicksRemaining == 0) {
+            MorphState.sendAbilityState("sheep_eating", "false");
+            if (pendingGrassPos != null) {
+                final BlockPos pos = pendingGrassPos;
+                pendingGrassPos = null;
+                var server = client.getSingleplayerServer();
+                if (server != null) {
+                    server.execute(() -> {
+                        var sp = server.getPlayerList().getPlayer(player.getUUID());
+                        if (sp != null && sp.level().getBlockState(pos).is(Blocks.GRASS_BLOCK)) {
+                            sp.level().setBlock(pos, Blocks.DIRT.defaultBlockState(), 3);
+                            sp.level().levelEvent(2001, pos, Block.getId(Blocks.GRASS_BLOCK.defaultBlockState()));
+                        }
+                    });
+                } else {
+                    MorphState.sendAbilityAction("sheep_grass", pos.getX() + "," + pos.getY() + "," + pos.getZ());
+                }
             }
         }
     }

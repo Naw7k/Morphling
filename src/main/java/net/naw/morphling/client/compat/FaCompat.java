@@ -12,7 +12,7 @@ public class FaCompat {
         try {
             return Minecraft.getInstance().getResourcePackRepository()
                     .getSelectedIds().stream()
-                    .anyMatch(id -> id.toLowerCase().contains("fresh"));
+                    .anyMatch(id -> id.toLowerCase().replace(" ", "").contains("freshanimations"));
         } catch (Exception e) {
             return false;
         }
@@ -29,6 +29,7 @@ public class FaCompat {
         if (morph instanceof net.minecraft.world.entity.animal.chicken.Chicken) return;
 
         try {
+            //noinspection JavaReflectionMemberAccess
             java.lang.reflect.Field f = net.minecraft.world.entity.Entity.class.getDeclaredField("emf$variableMap");
             f.setAccessible(true);
             Object map = f.get(morph);

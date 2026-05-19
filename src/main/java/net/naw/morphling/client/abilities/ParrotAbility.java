@@ -12,6 +12,7 @@ import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 
+@SuppressWarnings("BooleanMethodIsAlwaysInverted")
 public class ParrotAbility {
 
     private static long lastActionTime = 0L;
@@ -25,6 +26,7 @@ public class ParrotAbility {
         if (!(MorphState.getCachedEntity() instanceof Parrot parrot)) return;
         sitting = !sitting;
         parrot.setInSittingPose(sitting);
+        MorphState.sendAbilityState("parrot_sitting", String.valueOf(sitting));
     }
 
     public static void toggleDance(Minecraft client) {
@@ -33,6 +35,7 @@ public class ParrotAbility {
         if (client.player == null) return;
         dancing = !dancing;
         parrot.setRecordPlayingNearby(client.player.blockPosition(), dancing);
+        MorphState.sendAbilityState("parrot_dancing", String.valueOf(dancing));
     }
 
     public static void imitateNearbyMob(Minecraft client) {
@@ -84,8 +87,16 @@ public class ParrotAbility {
         double speedSqr = client.player.getDeltaMovement().horizontalDistanceSqr();
         boolean inAir = !client.player.onGround();
         if (speedSqr > 0.001 || inAir) {
-            if (sitting) { sitting = false; parrot.setInSittingPose(false); }
-            if (dancing) { dancing = false; parrot.setRecordPlayingNearby(client.player.blockPosition(), false); }
+            if (sitting) {
+                sitting = false;
+                parrot.setInSittingPose(false);
+                MorphState.sendAbilityState("parrot_sitting", "false");
+            }
+            if (dancing) {
+                dancing = false;
+                parrot.setRecordPlayingNearby(client.player.blockPosition(), false);
+                MorphState.sendAbilityState("parrot_dancing", "false");
+            }
         }
     }
 }

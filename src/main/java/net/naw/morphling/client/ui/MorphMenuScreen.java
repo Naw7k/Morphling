@@ -19,6 +19,7 @@ import net.minecraft.world.entity.player.PlayerSkin;
 import net.naw.morphling.client.core.EntityRegistry;
 import net.naw.morphling.client.core.MorphState;
 import net.naw.morphling.client.core.MorphVariantManager;
+import org.jspecify.annotations.NonNull;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -26,6 +27,29 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * The main morph selection screen (opened with G by default).
+
+ * Layout:
+ *  - Top bar: title, current morph status, player face, Reset button
+ *  - Category tabs (All / Passive / Hostile / Flying / Aquatic)
+ *  - Search box + help (?) + debug + background toggle + two-hands toggle buttons
+ *  - Scrollable grid of MorphTile widgets (6 columns)
+ *  - Close button at the bottom
+
+ * Two modes:
+ *  1. Normal grid view — shows filtered morph tiles
+ *  2. Variant view — shows variant tiles for a specific mob (opened by clicking the color icon on a tile)
+
+ * Scrolling:
+ *  - Mouse wheel scrolls the grid
+ *  - Custom scrollbar on the right side of the grid (draggable)
+ *  - Tiles are repositioned on scroll rather than rebuilt (avoids recreating preview entities)
+
+ * Help drawer:
+ *  - Slides in from the right when ? is clicked
+ *  - Shows keybind hints for each morph
+ */
 public class MorphMenuScreen extends Screen {
 
     private static final int TILE_SIZE = 54;
@@ -33,12 +57,13 @@ public class MorphMenuScreen extends Screen {
     private static final int COLUMNS = 6;
     private static final int TOP_BAR_HEIGHT = 80;
 
-    // --- SCROLLBAR CONFIG ---
+    // Scrollbar layout constants
     private static final int BOTTOM_PADDING = 40; // space reserved for the Close button
     private static final int SCROLLBAR_WIDTH = 6;
     private static final int SCROLLBAR_GAP = 4; // gap between grid and scrollbar
 
-    private EntityType<?> variantViewMob = null; // null when not in variant view
+    // null = normal grid view; non-null = variant selection view for that mob
+    private EntityType<?> variantViewMob = null;
 
     private enum Category {
         ALL("All"), PASSIVE("Passive"), HOSTILE("Hostile"), FLYING("Flying"), AQUATIC("Aquatic");
@@ -48,13 +73,15 @@ public class MorphMenuScreen extends Screen {
 
     private static final Set<EntityType<?>> HOSTILE_MOBS = Set.of(
             EntityType.ZOMBIE, EntityType.SKELETON, EntityType.CREEPER,
-            EntityType.ENDERMAN, EntityType.SPIDER, EntityType.WARDEN
+            EntityType.ENDERMAN, EntityType.SPIDER, EntityType.WARDEN,
+            EntityType.SLIME
     );
 
     private static final Set<EntityType<?>> AQUATIC_MOBS = Set.of(
             EntityType.DOLPHIN
     );
 
+    /** Keybind hints shown in the help drawer, ordered by mob. */
     private static final Map<EntityType<?>, String[]> KEYBIND_HINTS = new LinkedHashMap<>();
     static {
         KEYBIND_HINTS.put(EntityType.CHICKEN, new String[]{"Slow fall when jumping"});
@@ -70,12 +97,17 @@ public class MorphMenuScreen extends Screen {
         KEYBIND_HINTS.put(EntityType.ENDERMAN, new String[]{"R = teleport", "Shift+R = carry block", "F = angry"});
         KEYBIND_HINTS.put(EntityType.IRON_GOLEM, new String[]{"R = offer flower", "Attack = arm slam + knockback"});
         KEYBIND_HINTS.put(EntityType.DOLPHIN, new String[]{"R = splash jump", "Sprint underwater = speed boost", "B = squeak"});
+        KEYBIND_HINTS.put(EntityType.HORSE, new String[]{"R = rear up", "Shift+R = eat grass"});
+        KEYBIND_HINTS.put(EntityType.VILLAGER, new String[]{"R = unhappy", "Shift+R = sleep", "Ctrl+R = work sound", "B = hum", "Shift+B = yes", "Ctrl+B = celebrate"});
+        KEYBIND_HINTS.put(EntityType.SPIDER, new String[]{"R = leap", "Walk into wall = climb"});
+        KEYBIND_HINTS.put(EntityType.SLIME, new String[]{"Space = small hop", "R = big jump", "Contact damage on size 2+"});
+        KEYBIND_HINTS.put(EntityType.BEE, new String[]{"Space = toggle flight", "R = sting (poisons, one use)", "Shift+R = roll", "B = pollinate particles + sound", "Shift+B = nectar texture", "F = angry mode"});
     }
 
     private Category activeCategory = Category.ALL;
     private String searchQuery = "";
-    private EditBox searchBox;
-    private final List<MorphTile> tiles = new ArrayList<>();
+    // tiles holds both MorphTile and VariantTile (both extend AbstractWidget)
+    private final List<AbstractWidget> tiles = new ArrayList<>();
 
     private static boolean showBackground = true;
     private boolean helpDrawerOpen = false;
@@ -83,15 +115,15 @@ public class MorphMenuScreen extends Screen {
     private static final int DRAWER_WIDTH = 260;
     private int drawerScroll = 0;
 
-    // --- SCROLLBAR STATE ---
+    // Scrollbar state
     private int scrollOffset = 0;       // current scroll position in pixels
-    private int contentHeight = 0;      // total height of all rows
-    private int viewportHeight = 0;     // visible area height
-    private int viewportTop = 0;        // top Y of the scrollable region
-    private int gridStartXCached = 0;   // cached for scrollbar X position
+    private int contentHeight = 0;      // total pixel height of all tile rows
+    int viewportHeight = 0;             // visible grid area height (package-private for VariantTile clip checks)
+    int viewportTop = 0;                // top Y of the scrollable grid region (package-private for VariantTile)
+    private int gridStartXCached = 0;   // cached grid left edge for scrollbar X calculation
     private int gridWidthCached = 0;
     private boolean draggingScrollbar = false;
-    private double dragOffsetY = 0;     // mouse Y - thumb top, when drag started
+    private double dragOffsetY = 0;     // mouse Y offset from thumb top when drag started
 
     public MorphMenuScreen() {
         super(Component.literal("Morphling"));
@@ -101,6 +133,7 @@ public class MorphMenuScreen extends Screen {
     protected void init() {
         this.tiles.clear();
 
+        // Category tabs
         int tabWidth = 70;
         int tabHeight = 20;
         int tabY = 50;
@@ -112,31 +145,41 @@ public class MorphMenuScreen extends Screen {
             int tabX = tabStartX + i * (tabWidth + 4);
             this.addRenderableWidget(Button.builder(
                     Component.literal(cat.label + (activeCategory == cat ? " •" : "")),
-                    btn -> { activeCategory = cat; scrollOffset = 0; rebuild(); }
+                    _ -> { activeCategory = cat; scrollOffset = 0; rebuild(); }
             ).bounds(tabX, tabY, tabWidth, tabHeight).build());
         }
 
+        // Search box
         int searchWidth = 200;
         int searchX = (this.width - searchWidth) / 2;
-        this.searchBox = new EditBox(this.font, searchX, tabY + tabHeight + 6, searchWidth, 18,
+        EditBox searchBox = new EditBox(this.font, searchX, tabY + tabHeight + 6, searchWidth, 18,
                 Component.literal("Search mobs..."));
-        this.searchBox.setHint(Component.literal("Search mobs..."));
-        this.searchBox.setValue(this.searchQuery);
-        this.searchBox.setResponder(value -> { this.searchQuery = value.toLowerCase(); scrollOffset = 0; rebuildTiles(); });
-        this.addRenderableWidget(this.searchBox);
+        searchBox.setHint(Component.literal("Search mobs..."));
+        searchBox.setValue(this.searchQuery);
+        searchBox.setResponder(value -> { this.searchQuery = value.toLowerCase(); scrollOffset = 0; rebuildTiles(); });
+        this.addRenderableWidget(searchBox);
 
+        // Help (?) button
         int helpBtnSize = 20;
         this.addRenderableWidget(Button.builder(
                 Component.literal("?"),
-                btn -> { helpDrawerOpen = !helpDrawerOpen; drawerScroll = 0; }
+                _ -> { helpDrawerOpen = !helpDrawerOpen; drawerScroll = 0; }
         ).bounds(searchX - helpBtnSize - 6, tabY + tabHeight + 6, helpBtnSize, 18).build());
 
+        // Debug button — opens DebugScreen
+        this.addRenderableWidget(Button.builder(
+                Component.literal("§c🐛"),
+                _ -> Minecraft.getInstance().setScreen(new net.naw.morphling.client.debug.DebugScreen())
+        ).bounds(searchX - helpBtnSize - 6 - helpBtnSize - 4, tabY + tabHeight + 6, helpBtnSize, 18).build());
+
+        // Background blur toggle
         int blurBtnSize = 20;
         this.addRenderableWidget(Button.builder(
                 Component.literal(showBackground ? "●" : "○"),
                 btn -> { showBackground = !showBackground; btn.setMessage(Component.literal(showBackground ? "●" : "○")); }
         ).bounds(searchX + searchWidth + 6, tabY + tabHeight + 6, blurBtnSize, 18).build());
 
+        // Two-hands toggle
         int twoHandsBtnSize = 20;
         this.addRenderableWidget(Button.builder(
                 Component.literal(net.naw.morphling.client.config.TwoHandsConfig.isEnabled() ? "✋✋" : "✋"),
@@ -147,59 +190,105 @@ public class MorphMenuScreen extends Screen {
                 }
         ).bounds(searchX + searchWidth + 6 + blurBtnSize + 4, tabY + tabHeight + 6, twoHandsBtnSize, 18).build());
 
+        // Reset to player button
         int resetBtnWidth = 100;
         this.addRenderableWidget(Button.builder(
                 Component.literal("Reset to Player"),
-                btn -> { MorphState.reset(); this.onClose(); }
+                _ -> { MorphState.reset(); this.onClose(); }
         ).bounds(this.width - resetBtnWidth - 10, 10, resetBtnWidth, 20).build());
 
+        // Close button
         this.addRenderableWidget(Button.builder(
                 Component.literal("Close"),
-                btn -> this.onClose()
+                _ -> this.onClose()
         ).bounds((this.width - 80) / 2, this.height - 28, 80, 20).build());
+
+        // Back button — only shown in variant view
+        if (variantViewMob != null) {
+            this.addRenderableWidget(Button.builder(
+                    Component.literal("← Back"),
+                    _ -> closeVariantView()
+            ).bounds((this.width - 80) / 2 - 90, this.height - 28, 80, 20).build());
+        }
 
         rebuildTiles();
     }
 
+    /** Full rebuild — clears all widgets and re-runs init(). Used on category/filter change. */
     private void rebuild() {
         this.clearWidgets();
         init();
     }
 
+    /**
+     * Rebuilds only the tile widgets, keeping the header/tab/button widgets intact.
+     * Used when search query changes or scroll position needs recalculation.
+     */
+    @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
     private void rebuildTiles() {
         this.tiles.forEach(this::removeWidget);
         this.tiles.clear();
-
-        if (variantViewMob != null) {
-            VariantViewBuilder.build(variantViewMob, this.width,
-                    new VariantViewBuilder.WidgetAdder() {
-                        @Override
-                        public <T extends AbstractWidget> T add(T widget) {
-                            return MorphMenuScreen.this.addRenderableWidget(widget);
-                        }
-                    },
-                    () -> closeVariantView(),
-                    () -> this.onClose()
-            );
-            return;
-        }
-
-        List<EntityRegistry.MorphEntry> filtered = getFilteredMorphs();
 
         int gridWidth = TILE_SIZE * COLUMNS + TILE_SPACING * (COLUMNS - 1);
         int gridStartX = (this.width - gridWidth) / 2;
         int gridStartY = TOP_BAR_HEIGHT + 25;
 
-        // cache for scrollbar
+        // Cache grid dimensions for scrollbar rendering and tile repositioning
         this.gridStartXCached = gridStartX;
         this.gridWidthCached = gridWidth;
         this.viewportTop = gridStartY;
         this.viewportHeight = this.height - BOTTOM_PADDING - viewportTop;
 
+        if (variantViewMob != null) {
+            // Variant view: collect VariantTiles from builder and place them in the same grid system
+            List<VariantTile> variantTiles = new ArrayList<>();
+            List<AbstractWidget> otherWidgets = new ArrayList<>();
+
+            VariantViewBuilder.build(variantViewMob, this.width,
+                    new VariantViewBuilder.WidgetAdder() {
+                        @Override
+                        public <T extends AbstractWidget> T add(T widget) {
+                            if (widget instanceof VariantTile vt) {
+                                variantTiles.add(vt);
+                            } else {
+                                otherWidgets.add(widget);
+                                MorphMenuScreen.this.addRenderableWidget(widget);
+                            }
+                            return widget;
+                        }
+                    },
+                    this::onClose
+            );
+
+            // Calculate content height for scrollbar
+            int rows = (variantTiles.size() + COLUMNS - 1) / COLUMNS;
+            this.contentHeight = rows == 0 ? 0 : rows * TILE_SIZE + (rows - 1) * TILE_SPACING;
+
+            int maxScroll = Math.max(0, contentHeight - viewportHeight);
+            if (scrollOffset > maxScroll) scrollOffset = maxScroll;
+            if (scrollOffset < 0) scrollOffset = 0;
+
+            // Position variant tiles using same grid logic as main grid
+            for (int i = 0; i < variantTiles.size(); i++) {
+                VariantTile vt = variantTiles.get(i);
+                int col = i % COLUMNS;
+                int row = i / COLUMNS;
+                int x = gridStartX + col * (TILE_SIZE + TILE_SPACING);
+                int y = gridStartY + row * (TILE_SIZE + TILE_SPACING) - scrollOffset;
+                vt.setPosition(x, y);
+                this.tiles.add(vt);
+                this.addRenderableWidget(vt);
+            }
+            return;
+        }
+
+        // Normal grid view
+        List<EntityRegistry.MorphEntry> filtered = getFilteredMorphs();
+
         int rows = (filtered.size() + COLUMNS - 1) / COLUMNS;
         this.contentHeight = rows == 0 ? 0 : rows * TILE_SIZE + (rows - 1) * TILE_SPACING;
 
-        // clamp scroll in case filter shrank the content
+        // Clamp scroll in case filter shrank the content
         int maxScroll = Math.max(0, contentHeight - viewportHeight);
         if (scrollOffset > maxScroll) scrollOffset = maxScroll;
         if (scrollOffset < 0) scrollOffset = 0;
@@ -218,7 +307,7 @@ public class MorphMenuScreen extends Screen {
 
     /**
      * Repositions existing tiles based on current scrollOffset without recreating them.
-     * Avoids rebuilding entity previews every scroll tick.
+     * Called on scroll events to avoid rebuilding entity previews every frame.
      */
     private void repositionTiles() {
         int gridStartY = viewportTop;
@@ -231,12 +320,16 @@ public class MorphMenuScreen extends Screen {
         }
     }
 
+    /** Opens the variant selection view for the given mob type. */
     public void openVariantView(EntityType<?> mobType) {
+        scrollOffset = 0;
         variantViewMob = mobType;
         rebuild();
     }
 
+    /** Returns to the main grid from the variant selection view. */
     public void closeVariantView() {
+        scrollOffset = 0;
         variantViewMob = null;
         rebuild();
     }
@@ -263,7 +356,7 @@ public class MorphMenuScreen extends Screen {
     }
 
     private boolean needsScrollbar() {
-        return variantViewMob == null && contentHeight > viewportHeight;
+        return contentHeight > viewportHeight;
     }
 
     private int getMaxScroll() {
@@ -271,15 +364,16 @@ public class MorphMenuScreen extends Screen {
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        // Animate help drawer slide
         float target = helpDrawerOpen ? 1F : 0F;
         float diff = target - drawerSlide;
         drawerSlide += Math.signum(diff) * Math.min(Math.abs(diff), 0.15F);
 
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
 
+        // Title and current morph status
         graphics.centeredText(this.font, this.title, this.width / 2, 20, 0xFFFFFF);
-
         if (MorphState.isMorphed()) {
             Component current = Component.literal("Currently: " + MorphState.getCurrentMorph().getDescription().getString());
             graphics.centeredText(this.font, current, this.width / 2, 34, 0xAAAAAA);
@@ -287,6 +381,7 @@ public class MorphMenuScreen extends Screen {
             graphics.centeredText(this.font, Component.literal("Not morphed"), this.width / 2, 34, 0x888888);
         }
 
+        // Player face icon in top-right corner
         var mc = Minecraft.getInstance();
         if (mc.player != null) {
             PlayerSkin skin = mc.player.getSkin();
@@ -296,13 +391,13 @@ public class MorphMenuScreen extends Screen {
             PlayerFaceExtractor.extractRenderState(graphics, skin.body().texturePath(), headX, headY, headSize, true, false, -1);
         }
 
-        // draw scrollbar on top of everything (but under drawer)
+        // Scrollbar rendered on top of tiles but under the help drawer
         if (needsScrollbar()) {
             renderScrollbar(graphics, mouseX, mouseY);
         }
 
         if (drawerSlide > 0.001F) {
-            renderHelpDrawer(graphics, mouseX, mouseY);
+            renderHelpDrawer(graphics);
         }
     }
 
@@ -311,10 +406,10 @@ public class MorphMenuScreen extends Screen {
         int trackY = viewportTop;
         int trackH = viewportHeight;
 
-        // track background
+        // Track background
         graphics.fill(trackX, trackY, trackX + SCROLLBAR_WIDTH, trackY + trackH, 0x66000000);
 
-        // thumb size proportional to viewport/content ratio
+        // Thumb size proportional to viewport/content ratio, minimum 16px
         int thumbH = Math.max(16, (int)((float) viewportHeight / contentHeight * trackH));
         int maxScroll = getMaxScroll();
         int thumbY = maxScroll == 0 ? trackY : trackY + (int)((float) scrollOffset / maxScroll * (trackH - thumbH));
@@ -325,7 +420,7 @@ public class MorphMenuScreen extends Screen {
         graphics.fill(trackX, thumbY, trackX + SCROLLBAR_WIDTH, thumbY + thumbH, thumbColor);
     }
 
-    private void renderHelpDrawer(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    private void renderHelpDrawer(GuiGraphicsExtractor graphics) {
         int drawerW = DRAWER_WIDTH;
         int offset = (int)((1F - drawerSlide) * drawerW);
         int x0 = this.width - drawerW + offset;
@@ -333,6 +428,7 @@ public class MorphMenuScreen extends Screen {
         int y0 = 0;
         int y1 = this.height;
 
+        // Dim overlay behind the drawer
         int dim = (int)(drawerSlide * 100);
         graphics.fill(0, 0, this.width - drawerW + offset, this.height, (dim << 24));
         graphics.fill(x0, y0, x1, y1, 0xF0101010);
@@ -363,7 +459,7 @@ public class MorphMenuScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        // drawer scrolling first
+        // Drawer scrolling takes priority when mouse is over the drawer
         if (helpDrawerOpen && mouseX >= this.width - DRAWER_WIDTH) {
             drawerScroll -= (int)(scrollY * 15);
             if (drawerScroll < 0) drawerScroll = 0;
@@ -379,7 +475,7 @@ public class MorphMenuScreen extends Screen {
             return true;
         }
 
-        // grid scrolling — works anywhere over the viewport
+        // Grid scrolling within the viewport area
         if (needsScrollbar()
                 && mouseY >= viewportTop && mouseY < viewportTop + viewportHeight) {
             scrollOffset -= (int)(scrollY * 20);
@@ -394,7 +490,7 @@ public class MorphMenuScreen extends Screen {
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    public void extractBackground(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         if (showBackground) {
             super.extractBackground(graphics, mouseX, mouseY, partialTick);
         }
@@ -406,7 +502,8 @@ public class MorphMenuScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
+    public boolean keyPressed(net.minecraft.client.input.@NonNull KeyEvent event) {
+        // Allow G (or custom key) to close the menu
         if (net.naw.morphling.client.MorphlingClient.openMenuKey.matches(event)) {
             this.onClose();
             return true;
@@ -415,7 +512,8 @@ public class MorphMenuScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean doubleClick) {
+    public boolean mouseClicked(net.minecraft.client.input.@NonNull MouseButtonEvent event, boolean doubleClick) {
+        // Close drawer if clicking outside it
         if (helpDrawerOpen) {
             int drawerLeft = this.width - DRAWER_WIDTH;
             if (event.x() < drawerLeft) {
@@ -424,7 +522,7 @@ public class MorphMenuScreen extends Screen {
             }
         }
 
-        // scrollbar drag start
+        // Start scrollbar drag
         if (needsScrollbar()) {
             int trackX = gridStartXCached + gridWidthCached + SCROLLBAR_GAP;
             int trackY = viewportTop;
@@ -436,13 +534,11 @@ public class MorphMenuScreen extends Screen {
             double mx = event.x();
             double my = event.y();
             if (mx >= trackX && mx < trackX + SCROLLBAR_WIDTH && my >= trackY && my < trackY + trackH) {
+                draggingScrollbar = true;
                 if (my >= thumbY && my < thumbY + thumbH) {
-                    // grab the thumb
-                    draggingScrollbar = true;
                     dragOffsetY = my - thumbY;
                 } else {
-                    // click on track — jump thumb to that position
-                    draggingScrollbar = true;
+                    // Click on track outside thumb — jump to that position
                     dragOffsetY = thumbH / 2.0;
                     updateScrollFromMouse(my, thumbH, trackY, trackH);
                     repositionTiles();
@@ -455,7 +551,7 @@ public class MorphMenuScreen extends Screen {
     }
 
     @Override
-    public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event) {
+    public boolean mouseReleased(net.minecraft.client.input.@NonNull MouseButtonEvent event) {
         if (draggingScrollbar) {
             draggingScrollbar = false;
             return true;
@@ -464,7 +560,7 @@ public class MorphMenuScreen extends Screen {
     }
 
     @Override
-    public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent event, double deltaX, double deltaY) {
+    public boolean mouseDragged(net.minecraft.client.input.@NonNull MouseButtonEvent event, double deltaX, double deltaY) {
         if (draggingScrollbar && needsScrollbar()) {
             int trackY = viewportTop;
             int trackH = viewportHeight;
@@ -486,11 +582,19 @@ public class MorphMenuScreen extends Screen {
         scrollOffset = (int)(ratio * getMaxScroll());
     }
 
+    /**
+     * A single tile in the morph selection grid.
+
+     * Renders a live entity preview, border, and scrolling name label.
+     * Clicking the small color icon (top-right) opens the variant view for that mob.
+     * Clicking anywhere else applies the morph and closes the screen.
+     */
     public static class MorphTile extends AbstractWidget {
         private final EntityRegistry.MorphEntry entry;
         private final MorphMenuScreen screen;
         private LivingEntity previewEntity;
 
+        // Name label scrolling — animates back and forth when text is too wide for the tile
         private static final int SCROLL_PAUSE_FRAMES = 40;
         private static final float SCROLL_SPEED = 0.03F;
         private float scrollOffset = 0F;
@@ -510,25 +614,21 @@ public class MorphMenuScreen extends Screen {
             }
         }
 
-        public EntityRegistry.MorphEntry getEntry() { return entry; }
-
         @Override
-        protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            // Skip rendering entirely if tile is fully outside the viewport (perf + clean look)
+        protected void extractWidgetRenderState(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            // Skip tiles fully outside the viewport (performance + clean look)
             if (getY() + height < screen.viewportTop || getY() > screen.viewportTop + screen.viewportHeight) {
                 return;
             }
 
-            // Clip drawing to the viewport vertical bounds so partially-visible tiles
-            // cleanly cut off at the top/bottom edges instead of bleeding over the
-            // search bar / close button.
+            // Clip partially-visible tiles at the top/bottom viewport edges
             boolean clip = getY() < screen.viewportTop || getY() + height > screen.viewportTop + screen.viewportHeight;
             if (clip) {
                 graphics.enableScissor(getX(), screen.viewportTop, getX() + width, screen.viewportTop + screen.viewportHeight);
             }
 
             try {
-                renderTileContent(graphics, mouseX, mouseY, partialTick);
+                renderTileContent(graphics, mouseX, mouseY);
             } finally {
                 if (clip) {
                     graphics.disableScissor();
@@ -536,7 +636,7 @@ public class MorphMenuScreen extends Screen {
             }
         }
 
-        private void renderTileContent(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        private void renderTileContent(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
             boolean isCurrent = MorphState.getCurrentMorph() == entry.type();
             boolean hovered = this.isHovered();
 
@@ -566,6 +666,7 @@ public class MorphMenuScreen extends Screen {
 
             drawScrollingName(graphics, isCurrent);
 
+            // Variant color icon (top-right corner) — only for mobs with variants
             if (MorphVariantManager.hasVariants(entry.type())) {
                 int iconX = getX() + width - 14;
                 int iconY = getY() + 3;
@@ -582,6 +683,7 @@ public class MorphMenuScreen extends Screen {
             }
         }
 
+        /** Draws the mob name below the preview, scrolling horizontally if too long. */
         private void drawScrollingName(GuiGraphicsExtractor graphics, boolean isCurrent) {
             var font = Minecraft.getInstance().font;
             String fullName = entry.name().getString();
@@ -615,7 +717,8 @@ public class MorphMenuScreen extends Screen {
         }
 
         @Override
-        public void onClick(MouseButtonEvent event, boolean doubleClick) {
+        public void onClick(@NonNull MouseButtonEvent event, boolean doubleClick) {
+            // Click on color variant icon → open variant view
             if (MorphVariantManager.hasVariants(entry.type())) {
                 double mx = event.x();
                 double my = event.y();
@@ -626,17 +729,18 @@ public class MorphMenuScreen extends Screen {
                     return;
                 }
             }
+            // Click anywhere else → apply morph and close
             MorphState.setMorph(entry.type());
             screen.onClose();
         }
 
         @Override
-        public void playDownSound(SoundManager soundManager) {
+        public void playDownSound(@NonNull SoundManager soundManager) {
             AbstractWidget.playButtonClickSound(soundManager);
         }
 
         @Override
-        protected void updateWidgetNarration(NarrationElementOutput narrationElementOutput) {
+        protected void updateWidgetNarration(@NonNull NarrationElementOutput narrationElementOutput) {
             this.defaultButtonNarrationText(narrationElementOutput);
         }
     }

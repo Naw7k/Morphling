@@ -18,6 +18,7 @@ public class IronGolemAbility {
 
         offeringFlower = !offeringFlower;
         golem.offerFlower(offeringFlower);
+        MorphState.sendAbilityState("irongolem_flower", String.valueOf(offeringFlower));
     }
 
     public static boolean isOfferingFlower() {
@@ -41,15 +42,13 @@ public class IronGolemAbility {
         if (client.player == null) return;
         if (!(MorphState.getCachedEntity() instanceof IronGolem golem)) return;
 
-        // Sync cached golem's HP to match player's HP ratio — drives the crack visual
         float playerRatio = client.player.getHealth() / client.player.getMaxHealth();
         float targetHp = golem.getMaxHealth() * playerRatio;
         if (Math.abs(golem.getHealth() - targetHp) > 0.1F) {
             golem.setHealth(targetHp);
         }
 
-        // Manually decrement attackAnimationTick — cached entity never runs aiStep
-        var attackAccessor = (net.naw.morphling.mixin.accessors.IronGolemAttackAccessor)(Object) golem;
+        var attackAccessor = (net.naw.morphling.mixin.accessors.IronGolemAttackAccessor) golem;
         int currentTick = attackAccessor.morphling$getAttackAnimationTick();
         if (currentTick > 0) {
             attackAccessor.morphling$setAttackAnimationTick(currentTick - 1);

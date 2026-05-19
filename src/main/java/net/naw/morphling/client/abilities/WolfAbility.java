@@ -7,6 +7,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.animal.wolf.Wolf;
 import net.naw.morphling.client.core.MorphState;
 
+@SuppressWarnings("BooleanMethodIsAlwaysInverted")
 public class WolfAbility {
 
     private static long lastActionTime = 0L;
@@ -21,19 +22,20 @@ public class WolfAbility {
         if (!(MorphState.getCachedEntity() instanceof Wolf wolf)) return;
         sitting = !sitting;
         wolf.setInSittingPose(sitting);
+        MorphState.sendAbilityState("wolf_sitting", String.valueOf(sitting));
     }
 
     public static void triggerShake(Minecraft client) {
         if (!checkReady(client)) return;
         if (!(MorphState.getCachedEntity() instanceof Wolf wolf)) return;
 
-        // Set wet + shaking flags so the tick logic plays the animation
-        var accessor = (net.naw.morphling.mixin.accessors.WolfShakeAccessor)(Object) wolf;
+        var accessor = (net.naw.morphling.mixin.accessors.WolfShakeAccessor) wolf;
         accessor.morphling$setIsWet(true);
         accessor.morphling$setIsShaking(true);
         accessor.morphling$setShakeAnim(0.0F);
         accessor.morphling$setShakeAnimO(0.0F);
         shaking = true;
+        MorphState.sendAbilityState("wolf_shaking", "true");
 
         if (client.level != null && client.player != null) {
             client.level.playLocalSound(
@@ -49,6 +51,7 @@ public class WolfAbility {
         if (!(MorphState.getCachedEntity() instanceof Wolf wolf)) return;
         headTilted = !headTilted;
         wolf.setIsInterested(headTilted);
+        MorphState.sendAbilityState("wolf_headtilt", String.valueOf(headTilted));
     }
 
     public static void playPant(Minecraft client) {
@@ -56,7 +59,7 @@ public class WolfAbility {
         if (!(MorphState.getCachedEntity() instanceof Wolf wolf)) return;
         if (client.level == null || client.player == null) return;
 
-        var soundSet = ((net.naw.morphling.mixin.accessors.WolfSoundAccessor)(Object) wolf).morphling$getSoundSet();
+        var soundSet = ((net.naw.morphling.mixin.accessors.WolfSoundAccessor) wolf).morphling$getSoundSet();
         if (soundSet != null) {
             client.level.playLocalSound(
                     client.player.getX(), client.player.getY(), client.player.getZ(),
@@ -85,17 +88,16 @@ public class WolfAbility {
         if (client.player == null) return;
         if (!(MorphState.getCachedEntity() instanceof Wolf wolf)) return;
 
-        // Cancel sit on movement
         if (sitting) {
             double speedSqr = client.player.getDeltaMovement().horizontalDistanceSqr();
             if (speedSqr > 0.001) {
                 sitting = false;
                 wolf.setInSittingPose(false);
+                MorphState.sendAbilityState("wolf_sitting", "false");
             }
         }
 
-        // Manually animate head tilt (mirrors wolf.tick() logic)
-        var tickAccessor = (net.naw.morphling.mixin.accessors.WolfTickAccessor)(Object) wolf;
+        var tickAccessor = (net.naw.morphling.mixin.accessors.WolfTickAccessor) wolf;
         float current = tickAccessor.morphling$getInterestedAngle();
         tickAccessor.morphling$setInterestedAngleO(current);
         if (wolf.isInterested()) {
@@ -104,9 +106,8 @@ public class WolfAbility {
             tickAccessor.morphling$setInterestedAngle(current + (0.0F - current) * 0.4F);
         }
 
-        // Manually animate shake (mirrors wolf.tick() logic — shakeAnim increments 0.05 per tick to 2.0)
         if (shaking) {
-            var shakeAccessor = (net.naw.morphling.mixin.accessors.WolfShakeAccessor)(Object) wolf;
+            var shakeAccessor = (net.naw.morphling.mixin.accessors.WolfShakeAccessor) wolf;
             float shakeAnim = shakeAccessor.morphling$getShakeAnim();
             shakeAccessor.morphling$setShakeAnimO(shakeAnim);
             shakeAnim += 0.05F;
@@ -118,6 +119,7 @@ public class WolfAbility {
                 shakeAccessor.morphling$setIsShaking(false);
                 shakeAccessor.morphling$setShakeAnim(0.0F);
                 shakeAccessor.morphling$setShakeAnimO(0.0F);
+                MorphState.sendAbilityState("wolf_shaking", "false");
             }
         }
     }

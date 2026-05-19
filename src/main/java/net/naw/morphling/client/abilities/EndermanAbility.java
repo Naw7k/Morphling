@@ -13,6 +13,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.naw.morphling.client.core.MorphState;
 
 public class EndermanAbility {
 
@@ -25,7 +26,6 @@ public class EndermanAbility {
         Level level = client.level;
         if (player == null || level == null) return;
 
-        // Cooldown
         long now = System.currentTimeMillis();
         if (now - lastTeleportTime < TELEPORT_COOLDOWN_MS) return;
         lastTeleportTime = now;
@@ -52,13 +52,16 @@ public class EndermanAbility {
         }
 
         BlockState stateAtTarget = level.getBlockState(BlockPos.containing(targetPos));
+        //noinspection deprecation
         if (stateAtTarget.blocksMotion()) return;
 
+        // Play teleport sound at origin and broadcast
         level.playLocalSound(
                 player.getX(), player.getY(), player.getZ(),
                 SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS,
                 1.0F, 1.0F, false
         );
+        MorphState.broadcastSound(SoundEvents.ENDERMAN_TELEPORT, 1.0F, 1.0F);
 
         for (int i = 0; i < 32; i++) {
             level.addParticle(ParticleTypes.PORTAL,
@@ -101,10 +104,12 @@ public class EndermanAbility {
                     serverPlayer.teleportTo(targetPos.x, targetPos.y, targetPos.z);
                 }
             });
+        } else {
+            MorphState.sendAbilityAction("enderman_teleport",
+                    targetPos.x + "," + targetPos.y + "," + targetPos.z);
         }
     }
 
-    /** Called every tick — spawns portal particles around player while morphed as enderman. */
     public static void tickParticles(Minecraft client) {
         Player player = client.player;
         Level level = client.level;

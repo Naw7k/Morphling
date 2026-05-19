@@ -24,7 +24,6 @@ public class DolphinAbility {
 
         Player player = client.player;
 
-        // Moistness — drain on land, reset in water
         if (player.isInWaterOrRain()) {
             moistness = 2400;
         } else {
@@ -35,14 +34,16 @@ public class DolphinAbility {
                     server.execute(() -> {
                         var sp = server.getPlayerList().getPlayer(player.getUUID());
                         if (sp != null) {
+                            //noinspection deprecation
                             sp.hurt(sp.damageSources().dryOut(), 1.0F);
                         }
                     });
+                } else {
+                    MorphState.sendAbilityAction("dolphin_dry_damage", "");
                 }
             }
         }
 
-        // Sprint in water = Grace boost
         if (player.isSprinting() && player.isInWater()) {
             player.addEffect(new MobEffectInstance(MobEffects.DOLPHINS_GRACE, 20, 0, false, false));
         } else {

@@ -17,7 +17,7 @@ import net.naw.morphling.client.core.MorphState;
 
 public class ZombieAbility {
 
-    private static final int BREAK_TIME_TICKS = 240; // 12 seconds — matches vanilla BreakDoorGoal
+    private static final int BREAK_TIME_TICKS = 240;
     private static final double MAX_REACH = 3.0;
 
     private static int breakProgress = 0;
@@ -41,24 +41,20 @@ public class ZombieAbility {
 
         boolean isPressed = MorphlingClient.abilityKey.isDown();
 
-        // Released before completion — cancel
         if (!isPressed) {
             if (wasPressed) resetProgress(client);
             wasPressed = false;
             return;
         }
 
-        // Find the door the player is looking at
         BlockPos lookedAtDoor = findTargetDoor(player, level);
 
         if (lookedAtDoor == null) {
-            // Lost line of sight — cancel
             if (wasPressed) resetProgress(client);
             wasPressed = false;
             return;
         }
 
-        // Switched to a different door — restart progress
         if (currentDoorPos != null && !currentDoorPos.equals(lookedAtDoor)) {
             resetProgress(client);
         }
@@ -66,7 +62,6 @@ public class ZombieAbility {
         currentDoorPos = lookedAtDoor;
         wasPressed = true;
 
-        // Random knocking sound + arm swing (mirrors vanilla BreakDoorGoal.tick)
         if (player.getRandom().nextInt(20) == 0) {
             level.levelEvent(1019, currentDoorPos, 0);
             if (!player.swinging) {
@@ -76,14 +71,12 @@ public class ZombieAbility {
 
         breakProgress++;
 
-        // Update crack visual (0-10 stages)
         int visualProgress = (int) ((float) breakProgress / (float) BREAK_TIME_TICKS * 10.0F);
         if (visualProgress != lastVisualProgress) {
             level.destroyBlockProgress(player.getId(), currentDoorPos, visualProgress);
             lastVisualProgress = visualProgress;
         }
 
-        // Completed — break the door
         if (breakProgress >= BREAK_TIME_TICKS) {
             breakDoor(client, currentDoorPos);
             resetProgress(client);
@@ -107,9 +100,8 @@ public class ZombieAbility {
         BlockPos pos = hit.getBlockPos();
         BlockState state = level.getBlockState(pos);
 
-        // Only wood doors — iron doors and copper doors are not breakable by vanilla zombies
         if (!(state.getBlock() instanceof DoorBlock door)) return null;
-        if (!door.type().canOpenByHand()) return null; // iron door check
+        if (!door.type().canOpenByHand()) return null;
 
         return pos;
     }
@@ -121,11 +113,9 @@ public class ZombieAbility {
         Level level = client.level;
         BlockState state = level.getBlockState(pos);
 
-        // Matches vanilla: break sound + particle event
-        level.levelEvent(1021, pos, 0); // wooden door break sound
-        level.levelEvent(2001, pos, Block.getId(state)); // break particles
+        level.levelEvent(1021, pos, 0);
+        level.levelEvent(2001, pos, Block.getId(state));
 
-        // Server-side removal
         var server = client.getSingleplayerServer();
         if (server != null) {
             final BlockPos finalPos = pos;
@@ -135,12 +125,13 @@ public class ZombieAbility {
                     sp.level().removeBlock(finalPos, false);
                 }
             });
+        } else {
+            MorphState.sendAbilityAction("zombie_break_door", pos.getX() + "," + pos.getY() + "," + pos.getZ());
         }
     }
 
     private static void resetProgress(Minecraft client) {
         if (currentDoorPos != null && client.player != null && client.level != null) {
-            // Clear the crack visual
             client.level.destroyBlockProgress(client.player.getId(), currentDoorPos, -1);
         }
         breakProgress = 0;

@@ -13,7 +13,10 @@ public class HungerSync {
         if (!MorphState.isMorphed()) return false;
         var morph = MorphState.getCachedEntity();
         if (morph == null) return false;
-        return morph.getType() == EntityType.IRON_GOLEM
-                || morph.getType() == EntityType.ENDERMAN;
+        return
+                morph.getType() == EntityType.IRON_GOLEM
+                || morph.getType() == EntityType.ENDERMAN
+                 || morph.getType() == EntityType.SPIDER
+                  || morph.getType() == EntityType.SLIME;
     }
 }

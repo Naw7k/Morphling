@@ -9,7 +9,7 @@ import net.naw.morphling.mixin.accessors.EndermanCreepyAccessor;
 
 public class EndermanMadMode {
 
-    private static final int DURATION_TICKS = 600; // 30 seconds (20 ticks/sec)
+    private static final int DURATION_TICKS = 600;
     private static boolean active = false;
     private static int ticksRemaining = 0;
     private static long lastToggleTime = 0L;
@@ -38,7 +38,8 @@ public class EndermanMadMode {
             enderman.getEntityData().set(EndermanCreepyAccessor.morphling$getDataCreepy(), true);
         }
 
-        client.getSoundManager().play(new EndermanStareSound(client.player));
+        client.getSoundManager().play(new EndermanStareSound(client.player, EndermanMadMode::isActive));
+        MorphState.sendAbilityState("enderman_mad", "true");
     }
 
     public static void deactivate() {
@@ -47,11 +48,10 @@ public class EndermanMadMode {
         if (MorphState.getCachedEntity() instanceof EnderMan enderman) {
             enderman.getEntityData().set(EndermanCreepyAccessor.morphling$getDataCreepy(), false);
         }
+        MorphState.sendAbilityState("enderman_mad", "false");
     }
 
-    /** Called every tick — handles auto-timeout. */
-    public static void tick(Minecraft client) {
-        // Deactivate if morph changed away from enderman
+    public static void tick() {
         if (MorphState.getCurrentMorph() != EntityType.ENDERMAN) {
             if (active) deactivate();
             return;

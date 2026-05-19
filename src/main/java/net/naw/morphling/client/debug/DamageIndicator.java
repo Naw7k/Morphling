@@ -5,12 +5,11 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.naw.morphling.client.debug.DebugSettings;
 
 public class DamageIndicator {
 
     public static void register() {
-        AttackEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
+        AttackEntityCallback.EVENT.register((player, world, _, entity, _) -> {
             if (!DebugSettings.isDamageIndicatorEnabled()) return InteractionResult.PASS;
             if (world.isClientSide() && entity instanceof LivingEntity target) {
                 double attackDamage = player.getAttributeValue(Attributes.ATTACK_DAMAGE);

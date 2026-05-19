@@ -36,7 +36,7 @@ public class MorphDamageConfig {
         OVERRIDES.put(EntityType.FROG, 0.5);
 
         // Humanoids — non-combat
-        OVERRIDES.put(EntityType.VILLAGER, 1.0);
+        OVERRIDES.put(EntityType.VILLAGER, 0.0);
         OVERRIDES.put(EntityType.WANDERING_TRADER, 1.0);
 
         // Mobs that DO attack in vanilla — NOT overridden:

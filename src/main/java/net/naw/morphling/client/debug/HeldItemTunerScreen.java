@@ -4,6 +4,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import org.jspecify.annotations.NonNull;
 
 public class HeldItemTunerScreen extends Screen {
 
@@ -45,7 +46,7 @@ public class HeldItemTunerScreen extends Screen {
             Component label = active
                     ? Component.literal(t.label + " •").copy().withStyle(s -> s.withColor(0xFF55FF55).withBold(true))
                     : Component.literal(t.label);
-            this.addRenderableWidget(Button.builder(label, b -> {
+            this.addRenderableWidget(Button.builder(label, _ -> {
                 selected = t;
                 rebuild();
             }).bounds(x, btnY, btnW, 20).build());
@@ -54,8 +55,8 @@ public class HeldItemTunerScreen extends Screen {
         // Axis +/- rows
         int sliderY = 50;
         int rowH = 22;
-        addAxisButtons("X",  sliderY + rowH * 0);
-        addAxisButtons("Y",  sliderY + rowH * 1);
+        addAxisButtons("X", sliderY);
+        addAxisButtons("Y",  sliderY + rowH);
         addAxisButtons("Z",  sliderY + rowH * 2);
         addAxisButtons("S",  sliderY + rowH * 3);
         addAxisButtons("RX", sliderY + rowH * 4);
@@ -65,7 +66,7 @@ public class HeldItemTunerScreen extends Screen {
         // Reset
         this.addRenderableWidget(Button.builder(
                 Component.literal("Reset"),
-                b -> {
+                _ -> {
                     HeldItemTuner.Offset o = current();
                     HeldItemTuner.Offset def = (selected == Target.POPPY)
                             ? new HeldItemTuner.Offset(-0.800F, 1.150F, -0.250F, 1.050F, 345.0F, 0.0F, 60.0F)
@@ -76,11 +77,16 @@ public class HeldItemTunerScreen extends Screen {
                 }
         ).bounds(centerX - 50, sliderY + rowH * 7 + 4, 100, 20).build());
 
-        // Close
+        // Close/Back
         this.addRenderableWidget(Button.builder(
-                Component.literal("Close"),
-                b -> this.onClose()
-        ).bounds(centerX - 40, this.height - 28, 80, 20).build());
+                Component.literal("← Back"),
+                _ -> net.minecraft.client.Minecraft.getInstance().setScreen(new DebugScreen())
+        ).bounds(this.width / 2 - 82, this.height - 28, 80, 20).build());
+
+        this.addRenderableWidget(Button.builder(
+                Component.literal("× Close"),
+                _ -> this.onClose()
+        ).bounds(this.width / 2 + 2, this.height - 28, 80, 20).build());
     }
 
     private void addAxisButtons(String axis, int y) {
@@ -91,12 +97,12 @@ public class HeldItemTunerScreen extends Screen {
 
         this.addRenderableWidget(Button.builder(
                 Component.literal("-"),
-                b -> adjust(axis, -step)
+                _ -> adjust(axis, -step)
         ).bounds(centerX - 80, y, 30, 20).build());
 
         this.addRenderableWidget(Button.builder(
                 Component.literal("+"),
-                b -> adjust(axis, step)
+                _ -> adjust(axis, step)
         ).bounds(centerX + 50, y, 30, 20).build());
     }
 
@@ -119,7 +125,7 @@ public class HeldItemTunerScreen extends Screen {
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
 
         int centerX = this.width / 2;
@@ -130,8 +136,8 @@ public class HeldItemTunerScreen extends Screen {
         int sliderY = 50;
         int rowH = 22;
         int textOffset = 6;
-        drawCenteredValue(graphics, "X: "  + fmt(o.x),     sliderY + rowH * 0 + textOffset);
-        drawCenteredValue(graphics, "Y: "  + fmt(o.y),     sliderY + rowH * 1 + textOffset);
+        drawCenteredValue(graphics, "X: "  + fmt(o.x), sliderY + textOffset);
+        drawCenteredValue(graphics, "Y: "  + fmt(o.y),     sliderY + rowH + textOffset);
         drawCenteredValue(graphics, "Z: "  + fmt(o.z),     sliderY + rowH * 2 + textOffset);
         drawCenteredValue(graphics, "Scale: " + fmt(o.scale), sliderY + rowH * 3 + textOffset);
         drawCenteredValue(graphics, "RotX: " + fmtDeg(o.rotX), sliderY + rowH * 4 + textOffset);
@@ -150,11 +156,11 @@ public class HeldItemTunerScreen extends Screen {
     }
 
     private static String fmtDeg(float v) {
-        return String.format("%.1f\u00B0", v);
+        return String.format("%.1f°", v);
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    public void extractBackground(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         // see-through to game so we can see live changes
     }
 

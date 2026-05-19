@@ -10,13 +10,17 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.naw.morphling.client.core.MorphState;
 
+@SuppressWarnings("DataFlowIssue")
 public class SkeletonAbility {
 
     private static boolean bowEquipped = false;
     private static int bowSlot = -1;
 
     public static boolean isBowEquipped() {
-        return bowEquipped && MorphState.getCurrentMorph() == EntityType.SKELETON;
+        if (!bowEquipped || MorphState.getCurrentMorph() != EntityType.SKELETON) return false;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return false;
+        return mc.player.getInventory().getSelectedSlot() == bowSlot;
     }
 
     public static void toggleBow(Minecraft client) {
@@ -55,6 +59,7 @@ public class SkeletonAbility {
                 0.5F, 1.2F, false
         );
 
+        MorphState.sendAbilityState("skeleton_bow", "true");
         syncInventory(client);
     }
 
@@ -76,6 +81,7 @@ public class SkeletonAbility {
                 0.5F, 1.2F, false
         );
 
+        MorphState.sendAbilityState("skeleton_bow", "false");
         syncInventory(client);
     }
 
@@ -105,6 +111,7 @@ public class SkeletonAbility {
     }
 
     private static void syncInventory(Minecraft client) {
+        // Try singleplayer/LAN host path first
         var server = client.getSingleplayerServer();
         if (server != null && client.player != null) {
             var player = client.player;
@@ -116,6 +123,13 @@ public class SkeletonAbility {
                     }
                 }
             });
+        } else {
+            // Non-host on LAN — send via packet
+            if (bowEquipped) {
+                MorphState.sendAbilityAction("skeleton_equip_bow", String.valueOf(bowSlot));
+            } else {
+                MorphState.sendAbilityAction("skeleton_unequip_bow", String.valueOf(bowSlot));
+            }
         }
     }
 }
