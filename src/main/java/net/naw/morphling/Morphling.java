@@ -9,11 +9,12 @@ public class Morphling implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        // Register common and server-side networking (payloads, handlers, events)
         MorphlingNetworking.registerCommon();
         MorphlingNetworking.registerServer();
 
-        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
-            TestSpeedCommand.register(dispatcher);
-        });
+        // Register debug commands
+        CommandRegistrationCallback.EVENT.register((dispatcher, _, _) ->
+                TestSpeedCommand.register(dispatcher));
     }
 }
