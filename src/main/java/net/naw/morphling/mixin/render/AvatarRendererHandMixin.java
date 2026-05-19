@@ -17,6 +17,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.naw.morphling.client.core.MorphState;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -29,6 +30,7 @@ public abstract class AvatarRendererHandMixin {
 
     // Mobs where we render no hand at all
     // (Chicken & Parrot used to be here — now they render wings instead)
+    @Unique
     private static final Set<EntityType<?>> NO_HAND_MOBS = Set.of(
             // empty for now
     );
@@ -54,8 +56,9 @@ public abstract class AvatarRendererHandMixin {
     /**
      * Returns true if we handled the render (vanilla should cancel).
      */
+    @Unique
     private static boolean handleMorphArm(PoseStack poseStack, SubmitNodeCollector submitNodeCollector,
-                                          int lightCoords, boolean rightSide, CallbackInfo ci) {
+                                          int lightCoords, boolean rightSide, CallbackInfo ignoredCi) {
         if (!MorphState.isMorphed()) return false;
         Entity morph = MorphState.getCachedEntity();
         if (!(morph instanceof LivingEntity livingMorph)) return false;
@@ -161,6 +164,7 @@ public abstract class AvatarRendererHandMixin {
     }
 
 
+    @Unique
     private static ModelPart findArmPart(EntityModel<?> model, boolean rightSide, EntityType<?> morphType) {
         // Chicken & parrot — use wings as hands.
         // Their model classes have leftWing/rightWing fields directly, so we
@@ -211,11 +215,12 @@ public abstract class AvatarRendererHandMixin {
      * setupAnim only runs when the third-person model is actively rendered,
      * so in first person the wing rotation freezes. This drives it from the
      * cached entity's live flap/flapSpeed values every frame.
-     *
+
      * Uses partial-tick interpolation between the previous tick (oFlap/oFlapSpeed)
      * and current tick (flap/flapSpeed) so the animation is smooth at high FPS
      * instead of stepping at 20Hz.
      */
+    @Unique
     private static void applyWingFlap(ModelPart wing, LivingEntity morph, boolean rightSide) {
         wing.resetPose();
         try {
@@ -245,6 +250,7 @@ public abstract class AvatarRendererHandMixin {
     /**
      * Helper — look up a single field by name on a model and return it as a ModelPart.
      */
+    @Unique
     private static ModelPart getFieldPart(EntityModel<?> model, String fieldName) {
         Class<?> currentClass = model.getClass();
         while (currentClass != null && currentClass != Object.class) {
@@ -259,6 +265,7 @@ public abstract class AvatarRendererHandMixin {
         return null;
     }
 
+    @Unique
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static Identifier getTextureForMorph(LivingEntity morph, LivingEntityRenderer renderer) {
         try {

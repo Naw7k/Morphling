@@ -17,10 +17,10 @@ public abstract class CreeperAvoidMorphMixin {
     @Inject(method = "registerGoals", at = @At("TAIL"))
     private void morphling$addAvoidMorphGoal(CallbackInfo ci) {
         Creeper creeper = (Creeper)(Object) this;
-        ((net.naw.morphling.mixin.accessors.MobGoalSelectorAccessor)(Object) creeper).morphling$getGoalSelector().addGoal(3, new AvoidEntityGoal<>(
+        ((net.naw.morphling.mixin.accessors.MobGoalSelectorAccessor) creeper).morphling$getGoalSelector().addGoal(3, new AvoidEntityGoal<>(
                 creeper,
                 Player.class,
-                (livingEntity) -> {
+                (_) -> {
                     // Check if the nearby player is morphed as a mob that scares creepers
                     if (MorphState.getCurrentMorph() == null) return false;
                     return MorphFearConfig.shouldFlee(EntityType.CREEPER, MorphState.getCurrentMorph());
@@ -28,7 +28,7 @@ public abstract class CreeperAvoidMorphMixin {
                 6.0F,
                 1.0,
                 1.2,
-                (entity) -> true
+                (_) -> true
         ));
     }
 }

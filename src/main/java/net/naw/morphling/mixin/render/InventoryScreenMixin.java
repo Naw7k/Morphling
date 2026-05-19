@@ -12,6 +12,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+@SuppressWarnings("DataFlowIssue")
 @Mixin(InventoryScreen.class)
 public abstract class InventoryScreenMixin extends AbstractContainerScreen<net.minecraft.world.inventory.InventoryMenu> {
 
@@ -21,7 +22,7 @@ public abstract class InventoryScreenMixin extends AbstractContainerScreen<net.m
     }
 
     @Inject(method = "extractBackground", at = @At("TAIL"))
-    private void morphling$replaceMorphPreview(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+    private void morphling$replaceMorphPreview(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a, CallbackInfo ci) {
         if (!MorphState.isMorphed()) return;
 
         Entity morph = MorphState.getCachedEntity();

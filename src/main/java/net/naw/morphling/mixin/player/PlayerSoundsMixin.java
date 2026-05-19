@@ -19,7 +19,6 @@ public abstract class PlayerSoundsMixin {
 
     @Inject(method = "getHurtSound", at = @At("HEAD"), cancellable = true)
     private void morphling$overrideHurtSound(DamageSource source, CallbackInfoReturnable<SoundEvent> cir) {
-        System.out.println("[Morphling] getHurtSound fired on player morph!");
 
 
         LivingEntity self = (LivingEntity)(Object)this;
@@ -31,7 +30,7 @@ public abstract class PlayerSoundsMixin {
         Entity morphEntity = MorphState.getCachedEntity();
         if (!(morphEntity instanceof LivingEntity livingMorph)) return;
 
-        SoundEvent morphHurt = ((LivingEntityHurtSoundAccessor)(Object) livingMorph).morphling$getHurtSound(source);
+        SoundEvent morphHurt = ((LivingEntityHurtSoundAccessor) livingMorph).morphling$getHurtSound(source);
         if (morphHurt != null) cir.setReturnValue(morphHurt);
     }
 
@@ -46,7 +45,7 @@ public abstract class PlayerSoundsMixin {
         Entity morphEntity = MorphState.getCachedEntity();
         if (!(morphEntity instanceof LivingEntity livingMorph)) return;
 
-        SoundEvent morphDeath = ((LivingEntityDeathSoundAccessor)(Object) livingMorph).morphling$getDeathSound();
+        SoundEvent morphDeath = ((LivingEntityDeathSoundAccessor) livingMorph).morphling$getDeathSound();
         if (morphDeath != null) cir.setReturnValue(morphDeath);
     }
 }

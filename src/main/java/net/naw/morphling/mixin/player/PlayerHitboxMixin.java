@@ -1,6 +1,5 @@
 package net.naw.morphling.mixin.player;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.LivingEntity;
@@ -17,18 +16,41 @@ public abstract class PlayerHitboxMixin {
 
     @Inject(method = "getDimensions", at = @At("HEAD"), cancellable = true)
     private void morphling$overrideDimensions(Pose pose, CallbackInfoReturnable<EntityDimensions> cir) {
-        if (!MorphState.isMorphed()) return;
-
         Entity self = (Entity)(Object)this;
         if (!(self instanceof Player)) return;
 
-        // Match by UUID so both client-side and server-side copies of the player are affected (singleplayer)
-        if (Minecraft.getInstance().player == null) return;
-        if (!self.getUUID().equals(Minecraft.getInstance().player.getUUID())) return;
+        boolean isClientThread = Thread.currentThread().getName().equals("Render thread");
 
-        Entity morphEntity = MorphState.getCachedEntity();
-        if (morphEntity == null) return;
+        // Client-side path
+        if (isClientThread) {
+            // Local player
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+            if (mc.player != null && self.getUUID().equals(mc.player.getUUID())) {
+                if (!MorphState.isMorphed()) return;
+                Entity morphEntity = MorphState.getCachedEntity();
+                if (morphEntity == null) return;
+                cir.setReturnValue(morphEntity.getDimensions(pose));
+                return;
+            }
 
-        cir.setReturnValue(morphEntity.getDimensions(pose));
+            // Remote players
+            net.naw.morphling.client.core.RemoteMorphState.PlayerMorphData data = net.naw.morphling.client.core.RemoteMorphState.get(self.getUUID());
+            if (data != null && data.cachedEntity != null) {
+                cir.setReturnValue(data.cachedEntity.getDimensions(pose));
+            }
+            return;
+        }
+
+        // Server-side path — use playerMorphMap
+        String morphTypeId = net.naw.morphling.network.MorphlingNetworking.playerMorphMap.get(self.getUUID());
+        if (morphTypeId == null || morphTypeId.isEmpty()) return;
+        try {
+            net.minecraft.world.entity.EntityType<?> type = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE
+                    .getValue(net.minecraft.resources.Identifier.parse(morphTypeId));
+            if (type == null) return;
+            var morphEntity = type.create(self.level(), net.minecraft.world.entity.EntitySpawnReason.LOAD);
+            if (morphEntity == null) return;
+            cir.setReturnValue(morphEntity.getDimensions(pose));
+        } catch (Exception ignored) {}
     }
 }

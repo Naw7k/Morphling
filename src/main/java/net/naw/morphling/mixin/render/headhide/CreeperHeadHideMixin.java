@@ -15,7 +15,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(CreeperModel.class)
 public class CreeperHeadHideMixin {
 
-    @Shadow @Final public ModelPart head;
+    @Shadow @Final
+    private ModelPart head;
 
     @Inject(method = "setupAnim(Lnet/minecraft/client/renderer/entity/state/CreeperRenderState;)V", at = @At("TAIL"))
     private void morphling$hideHead(CreeperRenderState state, CallbackInfo ci) {

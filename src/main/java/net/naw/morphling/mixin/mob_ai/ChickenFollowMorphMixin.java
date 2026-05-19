@@ -4,7 +4,6 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.animal.chicken.Chicken;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.phys.Vec3;
 import net.naw.morphling.client.core.MorphState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -24,7 +23,7 @@ public abstract class ChickenFollowMorphMixin {
     @Inject(method = "registerGoals", at = @At("TAIL"))
     private void morphling$addFollowMorphedPlayerGoal(CallbackInfo ci) {
         Chicken chicken = (Chicken)(Object) this;
-        ((net.naw.morphling.mixin.accessors.MobGoalSelectorAccessor)(Object) chicken)
+        ((net.naw.morphling.mixin.accessors.MobGoalSelectorAccessor) chicken)
                 .morphling$getGoalSelector()
                 .addGoal(4, new FollowMorphedPlayerGoal(chicken));
     }

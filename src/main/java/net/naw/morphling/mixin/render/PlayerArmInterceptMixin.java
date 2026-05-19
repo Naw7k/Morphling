@@ -18,36 +18,30 @@ import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.LivingEntity;
 import net.naw.morphling.client.core.MorphState;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.lang.reflect.Field;
-import java.util.Set;
 
 /**
  * Intercepts ItemInHandRenderer.renderPlayerArm so that when we're morphed
  * into parrot/chicken/dolphin and FPM-style "two hand" rendering is forced,
  * we render the morph's wing/fin instead of the vanilla player arm.
- *
+
  * Zombie isn't in this list because it uses the humanoid arm directly and
  * vanilla rendering already works for it.
  */
 @Mixin(ItemInHandRenderer.class)
 public abstract class PlayerArmInterceptMixin {
 
-    private static final Set<EntityType<?>> SWAP_MORPHS = Set.of(
-            EntityType.PARROT,
-            EntityType.CHICKEN,
-            EntityType.DOLPHIN
-    );
-
     @Inject(method = "renderPlayerArm", at = @At("HEAD"), cancellable = true)
     private void morphling$swapInMorphArm(PoseStack poseStack,
                                           SubmitNodeCollector submitNodeCollector,
                                           int lightCoords,
-                                          float equipProgress,
-                                          float swingProgress,
+                                          float inverseArmHeight,
+                                          float attackValue,
                                           HumanoidArm arm,
                                           CallbackInfo ci) {
         if (!MorphState.isMorphed()) return;
@@ -75,15 +69,15 @@ public abstract class PlayerArmInterceptMixin {
         // our hand placement offset so the morph part lands in the right spot.
         boolean bl = arm != HumanoidArm.LEFT;
         float f = bl ? 1.0F : -1.0F;
-        float g = Mth.sqrt(swingProgress);
+        float g = Mth.sqrt(attackValue);
         float h = -0.3F * Mth.sin(g * (float) Math.PI);
         float i = 0.4F * Mth.sin(g * ((float) Math.PI * 2));
-        float j = -0.4F * Mth.sin(swingProgress * (float) Math.PI);
+        float j = -0.4F * Mth.sin(attackValue * (float) Math.PI);
 
         poseStack.pushPose();
-        poseStack.translate(f * (h + 0.64000005F), i - 0.6F + equipProgress * -0.6F, j - 0.71999997F);
+        poseStack.translate(f * (h + 0.64000005F), i - 0.6F + inverseArmHeight * -0.6F, j - 0.71999997F);
         poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(f * 45.0F));
-        float k = Mth.sin(swingProgress * swingProgress * (float) Math.PI);
+        float k = Mth.sin(attackValue * attackValue * (float) Math.PI);
         float l = Mth.sin(g * (float) Math.PI);
         poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(f * l * 70.0F));
         poseStack.mulPose(com.mojang.math.Axis.ZP.rotationDegrees(f * k * -20.0F));
@@ -91,7 +85,7 @@ public abstract class PlayerArmInterceptMixin {
         // Our hand placement offset
         net.naw.morphling.client.config.TwoHandsConfig.Offset offset =
                 net.naw.morphling.client.config.TwoHandsConfig.getOffset(morphType);
-        poseStack.translate(offset.x, offset.y, offset.z);
+        poseStack.translate(offset.x(), offset.y(), offset.z());
 
         // For chicken/parrot wings, drive flap from live values like the other mixin does
         if (morphType == EntityType.CHICKEN || morphType == EntityType.PARROT) {
@@ -112,6 +106,7 @@ public abstract class PlayerArmInterceptMixin {
         ci.cancel();
     }
 
+    @Unique
     private static ModelPart findMorphPart(EntityModel<?> model, boolean rightSide, EntityType<?> morphType) {
         // Wing for chicken/parrot
         if (morphType == EntityType.CHICKEN || morphType == EntityType.PARROT) {
@@ -133,6 +128,7 @@ public abstract class PlayerArmInterceptMixin {
         return null;
     }
 
+    @Unique
     private static ModelPart getFieldPart(EntityModel<?> model, String fieldName) {
         Class<?> currentClass = model.getClass();
         while (currentClass != null && currentClass != Object.class) {
@@ -147,6 +143,7 @@ public abstract class PlayerArmInterceptMixin {
         return null;
     }
 
+    @Unique
     private static void applyWingFlap(ModelPart wing, LivingEntity morph, boolean rightSide) {
         wing.resetPose();
         try {
@@ -165,6 +162,7 @@ public abstract class PlayerArmInterceptMixin {
         } catch (Exception ignored) {}
     }
 
+    @Unique
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static Identifier getTextureForMorph(LivingEntity morph, LivingEntityRenderer renderer) {
         try {

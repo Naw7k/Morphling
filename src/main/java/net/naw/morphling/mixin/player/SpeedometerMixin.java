@@ -2,6 +2,7 @@ package net.naw.morphling.mixin.player;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import net.naw.morphling.client.debug.DebugSettings;
@@ -10,6 +11,8 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import java.util.Objects;
 
 @Mixin(Player.class)
 public class SpeedometerMixin {
@@ -49,7 +52,7 @@ public class SpeedometerMixin {
             final int finalColor = tempColor;
 
             double speedAttr = player.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED) != null
-                    ? player.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED).getBaseValue()
+                    ? Objects.requireNonNull(player.getAttribute(Attributes.MOVEMENT_SPEED)).getBaseValue()
                     : 0.1;
 
             String content = String.format("Speed attr: %.3f | %.1f km/h (%s)", speedAttr, morphling$smoothKmh, state);

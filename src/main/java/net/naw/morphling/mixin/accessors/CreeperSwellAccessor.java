@@ -15,6 +15,4 @@ public interface CreeperSwellAccessor {
     @Accessor("oldSwell")
     void morphling$setOldSwell(int oldSwell);
 
-    @Accessor("oldSwell")
-    int morphling$getOldSwell();
 }

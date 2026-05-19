@@ -17,10 +17,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class PlayerAttackMixin {
 
     @Inject(method = "attack", at = @At("TAIL"))
-    private void morphling$ironGolemAttackEffects(Entity target, CallbackInfo ci) {
+    private void morphling$ironGolemAttackEffects(Entity entity, CallbackInfo ci) {
         Player self = (Player)(Object)this;
         if (Minecraft.getInstance().player == null) return;
         if (!self.getUUID().equals(Minecraft.getInstance().player.getUUID())) return;
+        if (!Minecraft.getInstance().isSameThread()) return;  // ADD THIS LINE
         if (MorphState.getCurrentMorph() != EntityType.IRON_GOLEM) return;
 
         // Trigger arm-slam animation + attack sound on the cached golem
@@ -28,13 +29,12 @@ public abstract class PlayerAttackMixin {
             golem.handleEntityEvent((byte) 4);
         }
 
-        // Apply vanilla-style upward knockback to living targets
-        if (target instanceof LivingEntity livingTarget) {
+        // Sync knockback to server — server applies it for all players including host
+        if (entity instanceof LivingEntity livingTarget) {
             double knockbackResistance = livingTarget.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE);
             double scale = Math.max(0.0, 1.0 - knockbackResistance);
-            target.setDeltaMovement(
-                    target.getDeltaMovement().add(0.0, 0.4 * scale, 0.0)
-            );
+            MorphState.sendAbilityAction("irongolem_knockback", entity.getId() + "," + scale);
+            MorphState.sendAbilityState("irongolem_attack", "true");
         }
     }
 }
