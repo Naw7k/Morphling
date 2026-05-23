@@ -86,11 +86,46 @@ public class SkeletonAbility {
     }
 
     public static void onMorphChanged(Minecraft client) {
-        if (bowEquipped && MorphState.getCurrentMorph() != EntityType.SKELETON) {
-            if (client.player != null) unequipBow(client);
+        if (client.player != null) {
+            Player player = client.player;
+            int slotToUnequip = bowSlot;
             bowEquipped = false;
             bowSlot = -1;
+            // Full scan to remove any leftover skeleton bow regardless of bowSlot
+            for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+                ItemStack s = player.getInventory().getItem(i);
+                if (s.getItem() == Items.BOW) {
+                    Component name = s.get(net.minecraft.core.component.DataComponents.CUSTOM_NAME);
+                    if (name != null && name.getString().equals("Skeleton Bow")) {
+                        player.getInventory().setItem(i, ItemStack.EMPTY);
+                        slotToUnequip = i;
+                    }
+                }
+            }
+            // Force unequip on server
+            var server = client.getSingleplayerServer();
+            if (server != null) {
+                server.execute(() -> {
+                    var sp = server.getPlayerList().getPlayer(player.getUUID());
+                    if (sp != null) {
+                        for (int i = 0; i < sp.getInventory().getContainerSize(); i++) {
+                            net.minecraft.world.item.ItemStack s = sp.getInventory().getItem(i);
+                            if (s.getItem() == Items.BOW) {
+                                net.minecraft.network.chat.Component name = s.get(net.minecraft.core.component.DataComponents.CUSTOM_NAME);
+                                if (name != null && name.getString().equals("Skeleton Bow")) {
+                                    sp.getInventory().setItem(i, net.minecraft.world.item.ItemStack.EMPTY);
+                                }
+                            }
+                        }
+                        sp.inventoryMenu.broadcastChanges();
+                    }
+                });
+            } else {
+                MorphState.sendAbilityAction("skeleton_unequip_bow", String.valueOf(slotToUnequip));
+            }
         }
+        bowEquipped = false;
+        bowSlot = -1;
     }
 
     public static void tickCleanup(Minecraft client) {
