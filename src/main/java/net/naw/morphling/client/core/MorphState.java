@@ -62,12 +62,17 @@ public class MorphState {
     public static void setMorph(EntityType<?> type) {
 
         if (net.naw.morphling.client.util.MultiplayerCheck.isOnMultiplayer()) return;
+        if (Minecraft.getInstance().player != null && Minecraft.getInstance().player.isSpectator()) return;
 
         boolean shouldTransition = type != currentMorph;
 
         currentMorph = type;
         cachedEntity = null;
         flightActive = false;
+        var resetPlayer = Minecraft.getInstance().player;
+        if (resetPlayer != null) {
+            resetPlayer.setDeltaMovement(0, 0, 0);
+        }
         SkeletonAbility.onMorphChanged(Minecraft.getInstance());
 
         if (type != null) {
@@ -88,7 +93,75 @@ public class MorphState {
 
         net.naw.morphling.client.health.HealthSync.onMorph(getCachedEntity());
 
+        // Save morph to player entity for persistence
+        var server = Minecraft.getInstance().getSingleplayerServer();
+        if (server != null) {
+            var player = Minecraft.getInstance().player;
+            if (player != null) {
+                server.execute(() -> {
+                    var serverPlayer = server.getPlayerList().getPlayer(player.getUUID());
+                    if (serverPlayer != null) {
+                        ((net.naw.morphling.client.core.MorphDataProvider) serverPlayer).morphling$setSavedMorph(type);
+                        ((net.naw.morphling.client.core.MorphDataProvider) serverPlayer).morphling$setSavedVariants(
+                                net.naw.morphling.client.core.MorphVariantManager.serializeVariants()
+                        );
+                    }
+                });
+            }
+        }
+
+        if (type == EntityType.IRON_GOLEM) {
+            net.naw.morphling.client.hunger.IronGolemHunger.onMorphToGolem();
+        } else {
+            net.naw.morphling.client.hunger.IronGolemHunger.onUnmorph();
+        }
+
+        // Save morph to NBT on dedicated server
+        if (net.naw.morphling.client.util.MultiplayerCheck.serverHasMorphling) {
+            String typeId = type != null ? BuiltInRegistries.ENTITY_TYPE.getKey(type).toString() : "";
+            ClientPlayNetworking.send(new MorphlingNetworking.SaveMorphPayload(typeId,
+                    net.naw.morphling.client.core.MorphVariantManager.serializeVariants()));
+        }
+
         // Sync to server/other players
+        sendMorphSync(type);
+    }
+
+    /**
+     * Applies a morph received from the server — bypasses the multiplayer check.
+     * Used when restoring a saved morph on join via MorphRestorePayload.
+     */
+    public static void setMorphFromServer(EntityType<?> type) {
+        if (Minecraft.getInstance().player != null && Minecraft.getInstance().player.isSpectator()) return;
+
+        boolean shouldTransition = type != currentMorph;
+        currentMorph = type;
+        cachedEntity = null;
+        flightActive = false;
+        var resetPlayer = Minecraft.getInstance().player;
+        if (resetPlayer != null) {
+            resetPlayer.setDeltaMovement(0, 0, 0);
+        }
+        SkeletonAbility.onMorphChanged(Minecraft.getInstance());
+
+        if (type != null) {
+            Level world = Minecraft.getInstance().level;
+            if (world != null) {
+                cachedEntity = type.create(world, EntitySpawnReason.LOAD);
+                MorphVariantManager.applyVariant(cachedEntity);
+            }
+        }
+
+        refreshPlayerSize();
+        applyMorphAttributes();
+
+        if (shouldTransition) {
+            net.naw.morphling.client.core.MorphTransition.trigger();
+        }
+
+        net.naw.morphling.client.health.HealthSync.onMorph(getCachedEntity());
+
+        // Resync to server so hitbox and other players are updated
         sendMorphSync(type);
     }
 
@@ -97,6 +170,7 @@ public class MorphState {
      * triggers transition effect, and syncs unmorph to server.
      */
     public static void reset() {
+        if (Minecraft.getInstance().player != null && Minecraft.getInstance().player.isSpectator()) return;
         boolean wasMorphed = currentMorph != null;
         currentMorph = null;
         cachedEntity = null;
@@ -112,6 +186,26 @@ public class MorphState {
         }
 
         net.naw.morphling.client.health.HealthSync.onUnmorph();
+
+        var server = Minecraft.getInstance().getSingleplayerServer();
+        if (server != null) {
+            var player = Minecraft.getInstance().player;
+            if (player != null) {
+                server.execute(() -> {
+                    var serverPlayer = server.getPlayerList().getPlayer(player.getUUID());
+                    if (serverPlayer != null) {
+                        ((net.naw.morphling.client.core.MorphDataProvider) serverPlayer).morphling$setSavedMorph(null);
+                    }
+                });
+            }
+        }
+
+        net.naw.morphling.client.hunger.IronGolemHunger.onUnmorph();
+
+        // Clear saved morph on dedicated server
+        if (net.naw.morphling.client.util.MultiplayerCheck.serverHasMorphling) {
+            ClientPlayNetworking.send(new MorphlingNetworking.SaveMorphPayload("", ""));
+        }
 
         // Sync unmorphed state
         sendMorphSync(null);
@@ -276,10 +370,7 @@ public class MorphState {
                     }
                 });
             }
-            AttributeInstance ps = player.getAttribute(Attributes.MOVEMENT_SPEED);
-            if (ps != null && ps.getBaseValue() != 0.1) {
-                ps.setBaseValue(0.1);
-            }
+
             return;
         }
 
@@ -305,9 +396,10 @@ public class MorphState {
             if (currentMorph == EntityType.BEE) {
                 baseScale = 0.10;
             }
-            double scaledSpeed = morphSpeed.getBaseValue() * baseScale;
+            double scrollRatio = net.naw.morphling.client.compat.ScrollWalkCompat.getSpeedRatio();
+            double scaledSpeed = morphSpeed.getBaseValue() * baseScale * scrollRatio;
             if (player.isSprinting()) {
-                scaledSpeed = morphSpeed.getBaseValue() * (baseScale + 0.1);
+                scaledSpeed = morphSpeed.getBaseValue() * (baseScale + 0.1) * scrollRatio;
             }
             if (playerSpeed.getBaseValue() != scaledSpeed) {
                 playerSpeed.setBaseValue(scaledSpeed);
@@ -381,6 +473,12 @@ public class MorphState {
             player.setSprinting(false);
         }
 
+        // Bug fix: double-tap-space triggers its own creative/spectator flight mode
+        // which bypasses our speed cap and causes the speed bug. Kill it every tick.
+        if (flightActive) {
+            player.getAbilities().flying = false;
+        }
+
         if (flightActive) {
             playFlightSounds(mc, player);
         }
@@ -397,6 +495,8 @@ public class MorphState {
                 sendAbilityState("flying", String.valueOf(flightActive));
                 if (flightActive) {
                     player.setDeltaMovement(player.getDeltaMovement().x, 0.15, player.getDeltaMovement().z);
+                    // Immediately kill vanilla flight in case it was triggered by this same tap
+                    player.getAbilities().flying = false;
 
                     if (currentMorph == EntityType.BEE) {
                         net.naw.morphling.client.abilities.BeeAbility.activeBeeSound =
@@ -563,5 +663,22 @@ public class MorphState {
 
     public static boolean isMorphed() {
         return currentMorph != null;
+    }
+
+    public static void clearOnDisconnect() {
+        currentMorph = null;
+        cachedEntity = null;
+        flightActive = false;
+        // Reset server-side hitbox
+        var server = Minecraft.getInstance().getSingleplayerServer();
+        var player = Minecraft.getInstance().player;
+        if (server != null && player != null) {
+            server.execute(() -> {
+                var serverPlayer = server.getPlayerList().getPlayer(player.getUUID());
+                if (serverPlayer != null) {
+                    serverPlayer.refreshDimensions();
+                }
+            });
+        }
     }
 }
