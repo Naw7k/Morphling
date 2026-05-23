@@ -5,6 +5,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
+import net.naw.morphling.client.core.MorphState;
 import net.naw.morphling.client.debug.DebugSettings;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -17,20 +18,16 @@ import java.util.Objects;
 @Mixin(Player.class)
 public class SpeedometerMixin {
 
-    @Unique
-    private Vec3 morphling$previousPosition = null;
-
-    @Unique
-    private double morphling$smoothKmh = 0.0;
-
-    @Unique
-    private boolean morphling$lastWasVisible = false;
+    @Unique private Vec3 morphling$previousPosition = null;
+    @Unique private double morphling$smoothKmh = 0.0;
+    @Unique private boolean morphling$lastWasVisible = false;
+    @Unique private double morphling$smoothedAttr = 0.1;
 
     @Inject(method = "tick", at = @At("HEAD"))
     private void morphling$tickSpeedometer(CallbackInfo ci) {
         Player player = (Player)(Object)this;
 
-        // Only affect the local player
+        if (!player.level().isClientSide()) return;
         if (Minecraft.getInstance().player == null) return;
         if (!player.getUUID().equals(Minecraft.getInstance().player.getUUID())) return;
 
@@ -51,11 +48,17 @@ public class SpeedometerMixin {
             else if (morphling$smoothKmh > 20) tempColor = 0xFFFF55;
             final int finalColor = tempColor;
 
-            double speedAttr = player.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED) != null
+            double rawAttr = player.getAttribute(Attributes.MOVEMENT_SPEED) != null
                     ? Objects.requireNonNull(player.getAttribute(Attributes.MOVEMENT_SPEED)).getBaseValue()
                     : 0.1;
 
-            String content = String.format("Speed attr: %.3f | %.1f km/h (%s)", speedAttr, morphling$smoothKmh, state);
+            if (MorphState.isMorphed()) {
+                morphling$smoothedAttr = rawAttr;
+            } else {
+                morphling$smoothedAttr += (rawAttr - morphling$smoothedAttr) * 0.2;
+            }
+
+            String content = String.format("Speed attr: %.3f | %.1f km/h (%s)", morphling$smoothedAttr, morphling$smoothKmh, state);
 
             Minecraft.getInstance().gui.setOverlayMessage(
                     Component.literal(content).withStyle(style -> style.withColor(finalColor)),
