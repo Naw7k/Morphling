@@ -58,6 +58,7 @@ public abstract class PlayerRendererMixin {
                                     SubmitNodeCollector submitNodeCollector, CameraRenderState camera,
                                     Minecraft client, CallbackInfo ci) {
         if (!MorphState.isMorphed()) return;
+        if (client.player.isSpectator()) return;
 
         FpmCompat.restoreHeadsIfNeeded();
 
@@ -126,6 +127,7 @@ public abstract class PlayerRendererMixin {
             EntityRenderDispatcher dispatcher = client.getEntityRenderDispatcher();
             EntityRenderer renderer = dispatcher.getRenderer(morphEntity);
             float partialTick = client.getDeltaTracker().getGameTimeDeltaPartialTick(false);
+            
             EntityRenderState morphState = renderer.createRenderState(morphEntity, partialTick);
             morphState.lightCoords = state.lightCoords;
 
