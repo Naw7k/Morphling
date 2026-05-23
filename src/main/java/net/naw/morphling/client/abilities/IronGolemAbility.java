@@ -9,6 +9,8 @@ public class IronGolemAbility {
 
     private static long lastActionTime = 0L;
     private static final long ACTION_COOLDOWN_MS = 300;
+    private static long lastHealTime = 0L;
+    private static final long HEAL_COOLDOWN_MS = 10000;
 
     private static boolean offeringFlower = false;
 
@@ -34,12 +36,30 @@ public class IronGolemAbility {
         return true;
     }
 
+    public static boolean tryHeal(Minecraft client) {
+        if (client.player == null) return false;
+        long now = System.currentTimeMillis();
+        if (now - lastHealTime < HEAL_COOLDOWN_MS) return false;
+        lastHealTime = now;
+        MorphState.sendAbilityAction("irongolem_heal", "");
+        return true;
+    }
+
     public static void tick(Minecraft client) {
         if (MorphState.getCurrentMorph() != EntityType.IRON_GOLEM) {
             offeringFlower = false;
             return;
         }
         if (client.player == null) return;
+        if (client.player.getFoodData().getFoodLevel() < 20) {
+            client.player.getFoodData().setFoodLevel(20);
+        }
+        if (client.player.isUsingItem()) {
+            net.minecraft.world.item.ItemStack using = client.player.getUseItem();
+            if (using.has(net.minecraft.core.component.DataComponents.FOOD)) {
+                client.player.stopUsingItem();
+            }
+        }
         if (!(MorphState.getCachedEntity() instanceof IronGolem golem)) return;
 
         float playerRatio = client.player.getHealth() / client.player.getMaxHealth();
