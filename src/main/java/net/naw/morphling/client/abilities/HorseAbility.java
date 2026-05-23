@@ -1,11 +1,14 @@
 package net.naw.morphling.client.abilities;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.animal.equine.AbstractHorse;
 import net.minecraft.world.entity.animal.equine.Horse;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.block.Blocks;
 import net.naw.morphling.client.core.MorphState;
 
 public class HorseAbility {
@@ -50,12 +53,17 @@ public class HorseAbility {
         MorphState.broadcastSound(SoundEvents.HORSE_ANGRY, 0.8F, 1.0F);
     }
 
-    /** Trigger grass eating animation */
+    /** Trigger grass eating animation — only works when standing on grass */
     public static void triggerEat(Minecraft client) {
         if (MorphState.getCurrentMorph() != EntityType.HORSE) return;
         if (client.player == null || client.level == null) return;
         long now = System.currentTimeMillis();
         if (now - lastEatTime < EAT_COOLDOWN_MS) return;
+
+        // Only eat when standing on grass
+        BlockPos below = client.player.blockPosition().below();
+        if (!client.level.getBlockState(below).is(Blocks.GRASS_BLOCK)) return;
+
         lastEatTime = now;
 
         if (!(MorphState.getCachedEntity() instanceof Horse horse)) return;
@@ -140,9 +148,30 @@ public class HorseAbility {
             MorphState.sendAbilityState("horse_rearing", "false");
         }
 
-        // Tick eat animation
+        // Tick eat animation — heal player every 25 ticks while eating
         if (isEating) {
             eatTicksRemaining--;
+
+            Player player = client.player;
+            if (eatTicksRemaining == 25 || eatTicksRemaining == 10) {
+                var server = client.getSingleplayerServer();
+                if (server != null) {
+                    server.execute(() -> {
+                        var sp = server.getPlayerList().getPlayer(player.getUUID());
+                        if (sp != null && sp.getHealth() < sp.getMaxHealth()) {
+                            sp.heal(0.5F);
+                        }
+                        if (sp != null) {
+                            var food = sp.getFoodData();
+                            food.setFoodLevel(Math.min(food.getFoodLevel() + 1, 20));
+                        }
+                    });
+                } else {
+                    MorphState.sendAbilityAction("sheep_heal", "");
+                    MorphState.sendAbilityAction("sheep_hunger", "");
+                }
+            }
+
             if (eatTicksRemaining <= 0) {
                 isEating = false;
                 ((net.naw.morphling.mixin.accessors.AbstractHorseAccessor) horse).morphling$setEating(false);
