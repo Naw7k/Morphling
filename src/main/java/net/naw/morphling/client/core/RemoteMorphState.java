@@ -475,11 +475,14 @@ public class RemoteMorphState {
             }
 
             if (data.villagerUnhappy) {
-                villager.setUnhappyCounter(250);
+                villager.setUnhappyCounter(300);
                 data.villagerUnhappy = false;
             }
 
             if (data.villagerSleeping) {
+                if (villager.getUnhappyCounter() > 0) {
+                    villager.setUnhappyCounter(villager.getUnhappyCounter() - 1);
+                }
                 if (remotePlayer != null) {
                     remotePlayer.setPose(net.minecraft.world.entity.Pose.SLEEPING);
                     if (remotePlayer instanceof net.minecraft.world.entity.LivingEntity livingRemote) {
