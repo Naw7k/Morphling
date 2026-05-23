@@ -22,6 +22,7 @@ import net.naw.morphling.client.core.MorphState;
 import net.naw.morphling.client.core.RemoteMorphState;
 import net.naw.morphling.client.debug.DamageIndicator;
 import net.naw.morphling.client.health.HealthSync;
+import net.naw.morphling.client.hunger.HungerSync;
 import net.naw.morphling.client.ui.MorphMenuScreen;
 import net.naw.morphling.client.util.MultiplayerCheck;
 import net.naw.morphling.mixin.accessors.LivingEntityAccessor;
@@ -79,6 +80,45 @@ public class MorphlingClient implements ClientModInitializer {
         // ── Handshake: server confirmed it has Morphling ─────────────────────
         // Sets serverHasMorphling = true, which gates all multiplayer packet sending.
         // Also resyncs our morph to the server in case we were already morphed.
+
+        // ── Morph restore: server sends our saved morph on join ──────────────────
+        ClientPlayNetworking.registerGlobalReceiver(MorphlingNetworking.MorphRestorePayload.TYPE, (payload, context) ->
+                context.client().execute(() -> {
+                    if (payload.entityTypeId().isEmpty()) return;
+                    net.minecraft.world.entity.EntityType<?> type = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE
+                            .getValue(net.minecraft.resources.Identifier.parse(payload.entityTypeId()));
+
+                    var mc = context.client();
+                    if (mc.getSingleplayerServer() != null && mc.player != null) {
+                        var server = mc.getSingleplayerServer();
+                        server.execute(() -> {
+                            var sp = server.getPlayerList().getPlayer(mc.player.getUUID());
+                            if (sp != null) {
+                                String variants = ((net.naw.morphling.client.core.MorphDataProvider) sp).morphling$getSavedVariants();
+                                if (variants != null && !variants.isEmpty()) {
+                                    mc.execute(() -> {
+                                        net.naw.morphling.client.core.MorphVariantManager.deserializeVariants(variants);
+                                        if (!Objects.requireNonNull(mc.player).isSpectator()) {
+                                            MorphState.setMorphFromServer(type);
+                                        }
+                                    });
+                                } else {
+                                    if (!Objects.requireNonNull(mc.player).isSpectator()) {
+                                        MorphState.setMorphFromServer(type);
+                                    }
+                                }
+                            }
+                        });
+                    } else {
+                        if (!Objects.requireNonNull(mc.player).isSpectator()) {
+                            if (!payload.variants().isEmpty()) {
+                                net.naw.morphling.client.core.MorphVariantManager.deserializeVariants(payload.variants());
+                            }
+                            MorphState.setMorphFromServer(type);
+                        }
+                    }
+                }));
+
         ClientPlayNetworking.registerGlobalReceiver(MorphlingNetworking.HandshakePayload.TYPE, (_, context) ->
                 context.client().execute(() -> {
                     MultiplayerCheck.serverHasMorphling = true;
@@ -102,15 +142,19 @@ public class MorphlingClient implements ClientModInitializer {
                     existingData.morphType = null;
                 }
                 RemoteMorphState.remove(uuid);
-                // Refresh hitbox back to normal player size on unmorph
-                if (context.client().level != null) {
-                    for (net.minecraft.world.entity.player.Player p : Objects.requireNonNull(context.client().level).players()) {
-                        if (p.getUUID().equals(uuid)) {
-                            p.refreshDimensions();
-                            break;
+                // Refresh hitbox for the remote player so their collision matches morph size
+                Minecraft mc = context.client();
+                mc.execute(() -> {
+                    if (mc.level != null) {
+                        for (net.minecraft.world.entity.player.Player p : mc.level.players()) {
+                            if (p.getUUID().equals(uuid)) {
+                                p.refreshDimensions();
+                                p.setBoundingBox(p.getDimensions(p.getPose()).makeBoundingBox(p.position()));
+                                break;
+                            }
                         }
                     }
-                }
+                });
                 return;
             }
 
@@ -148,15 +192,8 @@ public class MorphlingClient implements ClientModInitializer {
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientEntityEvents.ENTITY_LOAD.register((entity, _) -> {
             Minecraft mc = Minecraft.getInstance();
 
-            if (entity == mc.player && MorphState.isMorphed()) {
-                HealthSync.onRespawn();
-                MorphState.refreshPlayerSize();
-                MorphState.sendAbilityAction("respawn_refresh", "");
-            }
-
-            // Always schedule a delayed refresh so remote players' hitboxes are restored too
             if (entity == mc.player) {
-                respawnRefreshTicker = 10;
+                respawnRefreshTicker = 5;
             }
         });
 
@@ -295,6 +332,20 @@ public class MorphlingClient implements ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register((_, _) -> {
             MultiplayerCheck.serverHasMorphling = false;
             RemoteMorphState.clear();
+            MorphState.clearOnDisconnect();
+            // If in spectator, clear saved morph in NBT too
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player != null && mc.player.isSpectator()) {
+                var server = mc.getSingleplayerServer();
+                if (server != null) {
+                    server.execute(() -> {
+                        var serverPlayer = server.getPlayerList().getPlayer(mc.player.getUUID());
+                        if (serverPlayer != null) {
+                            ((net.naw.morphling.client.core.MorphDataProvider) serverPlayer).morphling$setSavedMorph(null);
+                        }
+                    });
+                }
+            }
         });
 
         // ── Keybinds ──────────────────────────────────────────────────────────
@@ -380,11 +431,19 @@ public class MorphlingClient implements ClientModInitializer {
             if (respawnRefreshTicker > 0) {
                 respawnRefreshTicker--;
                 if (respawnRefreshTicker == 0 && client.level != null) {
+                    if (client.player != null && !client.player.isSpectator()) {
+                        if (MorphState.isMorphed()) {
+                            HealthSync.onRespawn();
+                            MorphState.refreshPlayerSize();
+                        }
+                        MorphState.sendAbilityAction("respawn_refresh", "");
+                    }
                     for (net.minecraft.world.entity.player.Player p : client.level.players()) {
                         if (p == client.player) continue;
                         RemoteMorphState.PlayerMorphData data = RemoteMorphState.get(p.getUUID());
                         if (data != null && data.cachedEntity != null) {
                             p.refreshDimensions();
+                            p.setBoundingBox(p.getDimensions(p.getPose()).makeBoundingBox(p.position()));
                         }
                     }
                 }
@@ -416,6 +475,10 @@ public class MorphlingClient implements ClientModInitializer {
             BeeAbility.tick(client);
             MorphState.tickBeeFall();
 
+            if (MorphState.getCurrentMorph() == EntityType.ENDERMAN && client.player != null && client.player.isInWater()) {
+                EndermanAbility.tickWaterTeleport(client);
+            }
+
             // Animation and sync
             tickFlapAnimations(client);
             tickMorphSync(client);
@@ -423,7 +486,7 @@ public class MorphlingClient implements ClientModInitializer {
             // Health and transition systems
             net.naw.morphling.client.core.MorphTransition.tick();
             HealthSync.tick();
-            net.naw.morphling.client.health.HungerSync.tick();
+            HungerSync.tick();
 
             // ── Open morph menu (G) ──────────────────────────────────────────
             while (openMenuKey.consumeClick()) {
@@ -447,34 +510,48 @@ public class MorphlingClient implements ClientModInitializer {
                         org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_CONTROL
                 ) == 1;
 
+                // ── Cat — hiss / purr / ambient ─────────────────────────────
                 if (MorphState.getCurrentMorph() == EntityType.CAT) {
                     if (shift) CatAbility.playHiss(client);
                     else if (ctrl) CatAbility.playPurr(client);
                     else playMorphSound(client);
+
+                    // ── Wolf — pant / ambient ────────────────────────────────────
                 } else if (MorphState.getCurrentMorph() == EntityType.WOLF) {
                     if (ctrl) WolfAbility.playPant(client);
                     else playMorphSound(client);
+
+                    // ── Iron Golem — repair sound + heal ────────────────────────
                 } else if (MorphState.getCurrentMorph() == EntityType.IRON_GOLEM) {
                     if (client.level != null && client.player != null) {
-                        client.level.playLocalSound(
-                                client.player.getX(), client.player.getY(), client.player.getZ(),
-                                net.minecraft.sounds.SoundEvents.IRON_GOLEM_REPAIR, SoundSource.PLAYERS,
-                                1.0F, 1.0F, false
-                        );
+                        if (IronGolemAbility.tryHeal(client)) {
+                            client.level.playLocalSound(
+                                    client.player.getX(), client.player.getY(), client.player.getZ(),
+                                    net.minecraft.sounds.SoundEvents.IRON_GOLEM_REPAIR, SoundSource.PLAYERS,
+                                    0.7F, 1.0F, false
+                            );
+                            MorphState.broadcastSound(net.minecraft.sounds.SoundEvents.IRON_GOLEM_REPAIR, 0.7F, 1.0F);
+                        }
                     }
 
+                    // ── Villager — yes / celebrate / ambient ─────────────────────
                 } else if (MorphState.getCurrentMorph() == EntityType.VILLAGER) {
                     if (shift) VillagerAbility.playYes(client);
                     else if (ctrl) VillagerAbility.playCelebrate(client);
                     else VillagerAbility.playAmbient(client);
 
+                    // ── Bee — nectar / pollinate ─────────────────────────────────
                 } else if (MorphState.getCurrentMorph() == EntityType.BEE) {
                     if (shift) BeeAbility.toggleNectar();
                     else BeeAbility.triggerPollinate(client);
+
+                    // ── All others — generic ambient sound ───────────────────────
                 } else {
                     playMorphSound(client);
                 }
             }
+
+
 
             // ── Toggle mad/angry mode (F) ────────────────────────────────────
             while (madModeKey.consumeClick()) {
