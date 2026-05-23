@@ -48,8 +48,9 @@ public class HandPlacementConfig {
         OFFSETS.put(EntityType.DOLPHIN,    new Offset(-0.350F, 0.100F, -0.500F));
         OFFSETS.put(EntityType.CHICKEN,    new Offset(-0.250F, -0.550F, 0.150F));
         OFFSETS.put(EntityType.PARROT,     new Offset(-0.400F, -0.800F, 0.100F));
-        OFFSETS.put(EntityType.HORSE,      new Offset(-0.200F, -0.800F, 0.300F));
+        OFFSETS.put(EntityType.HORSE,      new Offset(-0.200F, -0.450F, 0.700F));
         OFFSETS.put(EntityType.VILLAGER,   new Offset(-0.300F, -0.700F, 0.000F));
+        OFFSETS.put(EntityType.SPIDER,     new Offset(0.000F, 0.000F, 0.000F));
 
 
         // FA
@@ -67,10 +68,9 @@ public class HandPlacementConfig {
         FA_OFFSETS.put(EntityType.CHICKEN,    new Offset(0.000F, 0.000F, 0.000F));
         FA_OFFSETS.put(EntityType.PARROT,     new Offset(0.000F, 0.000F, 0.000F));
 
-
-                                //  LATER
         FA_OFFSETS.put(EntityType.HORSE,      new Offset(-0.000F, -0.000F, 0.000F));
-        FA_OFFSETS.put(EntityType.VILLAGER, new Offset(0.000F, 0.000F, 0.000F));
+        FA_OFFSETS.put(EntityType.VILLAGER,   new Offset(0.000F, 0.000F, 0.000F));
+        FA_OFFSETS.put(EntityType.SPIDER,     new Offset(-0.900F, 0.750F, 0.500F));
 
     }
 
@@ -95,7 +95,7 @@ public class HandPlacementConfig {
         if (type == EntityType.CHICKEN)    return new Offset(-0.250F, -0.550F, 0.150F);
         if (type == EntityType.PARROT)     return new Offset(-0.400F, -0.800F, 0.100F);
 
-        if (type == EntityType.HORSE)      return new Offset(-0.200F, -0.800F, 0.300F);
+        if (type == EntityType.HORSE)      return new Offset(-0.200F, -0.450F, 0.700F);
         if (type == EntityType.VILLAGER)   return new Offset(-0.300F, -0.700F, 0.000F);
         if (isHumanoid(type))              return new Offset(0.000F, 0.000F, 0.000F);
         return new Offset(0.000F, -0.350F, 0.500F);
@@ -117,6 +117,7 @@ public class HandPlacementConfig {
 
         if (type == EntityType.HORSE)      return new Offset(-0.000F, -0.000F, 0.000F);
         if (type == EntityType.VILLAGER)   return new Offset(0.000F, 0.000F, 0.000F);
+        if (type == EntityType.SPIDER)     return new Offset(-0.900F, 0.750F, 0.500F);
         return new Offset(0.000F, 0.500F, 0.500F);
     }
 
@@ -142,7 +143,7 @@ public class HandPlacementConfig {
                 EntityType.PIG, EntityType.COW, EntityType.SHEEP,
                 EntityType.WOLF, EntityType.CAT, EntityType.CREEPER,
                 EntityType.ZOMBIE, EntityType.SKELETON, EntityType.ENDERMAN, EntityType.IRON_GOLEM,
-                EntityType.DOLPHIN, EntityType.CHICKEN, EntityType.PARROT, EntityType.HORSE, EntityType.VILLAGER
+                EntityType.DOLPHIN, EntityType.CHICKEN, EntityType.PARROT, EntityType.SPIDER, EntityType.HORSE, EntityType.VILLAGER
         };
     }
 
