@@ -25,6 +25,10 @@ public class SheepAbility {
 
         long now = System.currentTimeMillis();
         if (now - lastEatTime < EAT_COOLDOWN_MS) return;
+
+        BlockPos below = client.player.blockPosition().below();
+        if (!client.level.getBlockState(below).is(Blocks.GRASS_BLOCK)) return;
+
         lastEatTime = now;
 
         eatTicksRemaining = EAT_DURATION_TICKS;
@@ -40,7 +44,6 @@ public class SheepAbility {
                 0.5F, 1.0F, false
         );
 
-        BlockPos below = client.player.blockPosition().below();
         if (client.level.getBlockState(below).is(Blocks.GRASS_BLOCK)) {
             pendingGrassPos = below;
         } else {
