@@ -3,6 +3,7 @@ package net.naw.morphling.client.core;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.animal.chicken.ChickenVariant;
@@ -49,6 +50,127 @@ public class MorphVariantManager {
                 || type == EntityType.VILLAGER
                 || type == EntityType.SLIME;
     }
+
+    /** Serialize all current variants to a single comma-separated string for NBT storage */
+    public static String serializeVariants() {
+        String parrot = currentParrotVariant != null ? currentParrotVariant.name() : "RED_BLUE";
+        String cat = currentCatVariant != null ? currentCatVariant.unwrapKey().orElseThrow().identifier().toString() : "";
+        String wolf = currentWolfVariant != null ? currentWolfVariant.unwrapKey().orElseThrow().identifier().toString() : "";
+        String cow = currentCowVariant != null ? currentCowVariant.unwrapKey().orElseThrow().identifier().toString() : "";
+        String sheep = currentSheepColor != null ? currentSheepColor.name() : "WHITE";
+        String pig = currentPigVariant != null ? currentPigVariant.unwrapKey().orElseThrow().identifier().toString() : "";
+        String chicken = currentChickenVariant != null ? currentChickenVariant.unwrapKey().orElseThrow().identifier().toString() : "";
+        String horseColor = currentHorseColor != null ? currentHorseColor.name() : "WHITE";
+        String horseMarkings = currentHorseMarkings != null ? currentHorseMarkings.name() : "NONE";
+        String villagerProf = currentVillagerProfession != null ? currentVillagerProfession.unwrapKey().orElseThrow().identifier().toString() : "";
+        String villagerType = currentVillagerType != null ? currentVillagerType.unwrapKey().orElseThrow().identifier().toString() : "";
+        String slime = String.valueOf(currentSlimeSize);
+        return String.join("|", parrot, cat, wolf, cow, sheep, pig, chicken, horseColor, horseMarkings, villagerProf, villagerType, slime);
+    }
+
+
+    /** Apply a serialized variants string back to MorphVariantManager */
+    public static void deserializeVariants(String data) {
+        if (data == null || data.isEmpty()) return;
+        String[] parts = data.split("\\|", -1);
+        if (parts.length < 12) return;
+
+        try {
+            // Parrot
+            currentParrotVariant = Parrot.Variant.valueOf(parts[0]);
+        } catch (Exception ignored) {}
+
+        try {
+            // Cat
+            if (!parts[1].isEmpty() && Minecraft.getInstance().level != null) {
+                currentCatVariant = Minecraft.getInstance().level.registryAccess()
+                        .lookupOrThrow(Registries.CAT_VARIANT)
+                        .get(net.minecraft.resources.ResourceKey.create(Registries.CAT_VARIANT, Identifier.parse(parts[1])))
+                        .orElse(null);
+            }
+        } catch (Exception ignored) {}
+
+        try {
+            // Wolf
+            if (!parts[2].isEmpty() && Minecraft.getInstance().level != null) {
+                currentWolfVariant = Minecraft.getInstance().level.registryAccess()
+                        .lookupOrThrow(Registries.WOLF_VARIANT)
+                        .get(net.minecraft.resources.ResourceKey.create(Registries.WOLF_VARIANT, Identifier.parse(parts[2])))
+                        .orElse(null);
+            }
+        } catch (Exception ignored) {}
+
+        try {
+            // Cow
+            if (!parts[3].isEmpty() && Minecraft.getInstance().level != null) {
+                currentCowVariant = Minecraft.getInstance().level.registryAccess()
+                        .lookupOrThrow(Registries.COW_VARIANT)
+                        .get(net.minecraft.resources.ResourceKey.create(Registries.COW_VARIANT, Identifier.parse(parts[3])))
+                        .orElse(null);
+            }
+        } catch (Exception ignored) {}
+
+        try {
+            // Sheep
+            if (!parts[4].isEmpty()) currentSheepColor = net.minecraft.world.item.DyeColor.valueOf(parts[4]);
+        } catch (Exception ignored) {}
+
+        try {
+            // Pig
+            if (!parts[5].isEmpty() && Minecraft.getInstance().level != null) {
+                currentPigVariant = Minecraft.getInstance().level.registryAccess()
+                        .lookupOrThrow(Registries.PIG_VARIANT)
+                        .get(net.minecraft.resources.ResourceKey.create(Registries.PIG_VARIANT, Identifier.parse(parts[5])))
+                        .orElse(null);
+            }
+        } catch (Exception ignored) {}
+
+        try {
+            // Chicken
+            if (!parts[6].isEmpty() && Minecraft.getInstance().level != null) {
+                currentChickenVariant = Minecraft.getInstance().level.registryAccess()
+                        .lookupOrThrow(Registries.CHICKEN_VARIANT)
+                        .get(net.minecraft.resources.ResourceKey.create(Registries.CHICKEN_VARIANT, Identifier.parse(parts[6])))
+                        .orElse(null);
+            }
+        } catch (Exception ignored) {}
+
+        try {
+            // Horse color
+            if (!parts[7].isEmpty()) currentHorseColor = net.minecraft.world.entity.animal.equine.Variant.valueOf(parts[7]);
+        } catch (Exception ignored) {}
+
+        try {
+            // Horse markings
+            if (!parts[8].isEmpty()) currentHorseMarkings = net.minecraft.world.entity.animal.equine.Markings.valueOf(parts[8]);
+        } catch (Exception ignored) {}
+
+        try {
+            // Villager profession
+            if (!parts[9].isEmpty() && Minecraft.getInstance().level != null) {
+                currentVillagerProfession = Minecraft.getInstance().level.registryAccess()
+                        .lookupOrThrow(net.minecraft.core.registries.Registries.VILLAGER_PROFESSION)
+                        .get(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.VILLAGER_PROFESSION, Identifier.parse(parts[9])))
+                        .orElse(null);
+            }
+        } catch (Exception ignored) {}
+
+        try {
+            // Villager type
+            if (!parts[10].isEmpty() && Minecraft.getInstance().level != null) {
+                currentVillagerType = Minecraft.getInstance().level.registryAccess()
+                        .lookupOrThrow(net.minecraft.core.registries.Registries.VILLAGER_TYPE)
+                        .get(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.VILLAGER_TYPE, Identifier.parse(parts[10])))
+                        .orElse(null);
+            }
+        } catch (Exception ignored) {}
+
+        try {
+            // Slime size
+            if (!parts[11].isEmpty()) currentSlimeSize = Integer.parseInt(parts[11]);
+        } catch (Exception ignored) {}
+    }
+
 
     // Apply current variant to a freshly-created entity (called from MorphState.setMorph)
     public static void applyVariant(Entity entity) {
