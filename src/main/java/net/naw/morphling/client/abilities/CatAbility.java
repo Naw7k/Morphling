@@ -45,6 +45,7 @@ public class CatAbility {
                     net.minecraft.sounds.SoundEvents.CAT_HISS_BABY.value(), SoundSource.PLAYERS,
                     1.0F, 1.0F, false
             );
+            MorphState.broadcastSound(net.minecraft.sounds.SoundEvents.CAT_HISS_BABY.value(), 1.0F, 1.0F);
         }
     }
 
@@ -56,6 +57,7 @@ public class CatAbility {
                     net.minecraft.sounds.SoundEvents.CAT_PURR_BABY.value(), SoundSource.PLAYERS,
                     1.0F, 1.0F, false
             );
+            MorphState.broadcastSound(net.minecraft.sounds.SoundEvents.CAT_PURR_BABY.value(), 1.0F, 1.0F);
         }
     }
 
