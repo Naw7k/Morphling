@@ -13,6 +13,7 @@ public class VillagerAbility {
     private static final long ACTION_COOLDOWN_MS = 300;
     private static long lastActionTime = 0L;
     private static float sleepLockedYRot = 0f;
+    private static int unhappyResetTimer = 0;
 
     // Sleep state
     private static boolean sleeping = false;
@@ -21,6 +22,8 @@ public class VillagerAbility {
     public static void triggerUnhappy(Minecraft client) {
         if (!checkReady(client)) return;
         if (!(MorphState.getCachedEntity() instanceof Villager villager)) return;
+
+        unhappyResetTimer = 45;
 
         villager.setUnhappyCounter(40);
         MorphState.sendAbilityState("villager_unhappy", "true");
@@ -149,9 +152,16 @@ public class VillagerAbility {
             client.player.yBodyRot = sleepLockedYRot;
             client.player.yBodyRotO = sleepLockedYRot;
             client.player.yHeadRot = sleepLockedYRot;
+            // Still tick unhappy counter down while sleeping
+            if (villager.getUnhappyCounter() > 0) {
+                villager.setUnhappyCounter(villager.getUnhappyCounter() - 1);
+                if (villager.getUnhappyCounter() == 0) {
+                    MorphState.sendAbilityState("villager_unhappy", "false");
+                }
+            }
         }
 
-// Cancel sleep if player moves
+        // Cancel sleep if player moves
         if (sleeping) {
             double speedSqr = client.player.getDeltaMovement().horizontalDistanceSqr();
             if (speedSqr > 0.001) {
@@ -159,6 +169,13 @@ public class VillagerAbility {
                 villager.setPose(net.minecraft.world.entity.Pose.STANDING);
                 client.player.setPose(net.minecraft.world.entity.Pose.STANDING);
                 MorphState.sendAbilityState("villager_sleeping", "false");
+            }
+        }
+
+        if (unhappyResetTimer > 0) {
+            unhappyResetTimer--;
+            if (unhappyResetTimer == 0) {
+                MorphState.sendAbilityState("villager_unhappy", "false");
             }
         }
     }
