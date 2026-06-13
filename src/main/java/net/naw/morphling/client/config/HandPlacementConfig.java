@@ -52,6 +52,13 @@ public class HandPlacementConfig {
         OFFSETS.put(EntityType.VILLAGER,   new Offset(-0.300F, -0.700F, 0.000F));
         OFFSETS.put(EntityType.SPIDER,     new Offset(0.000F, 0.000F, 0.000F));
 
+        OFFSETS.put(EntityType.FOX,        new Offset(-0.250F, -0.750F, 0.050F));
+        OFFSETS.put(EntityType.RABBIT,     new Offset(-0.550F, 0.000F, 0.000F));
+        OFFSETS.put(EntityType.AXOLOTL,    new Offset(-0.200F, 0.300F, 0.450F));
+        OFFSETS.put(EntityType.FROG,       new Offset(-0.300F, 0.300F, 0.300F));
+        OFFSETS.put(EntityType.POLAR_BEAR, new Offset(-0.150F, -0.550F, 0.650F));
+        OFFSETS.put(EntityType.PANDA, new Offset(0.050F, -0.450F, 0.850F));
+
 
         // FA
         FA_OFFSETS.put(EntityType.CAT,        new Offset(-0.100F, 1.150F, 0.250F));
@@ -94,6 +101,13 @@ public class HandPlacementConfig {
         if (type == EntityType.DOLPHIN)    return new Offset(-0.350F, 0.100F, -0.500F);
         if (type == EntityType.CHICKEN)    return new Offset(-0.250F, -0.550F, 0.150F);
         if (type == EntityType.PARROT)     return new Offset(-0.400F, -0.800F, 0.100F);
+
+        if (type == EntityType.FOX)     return new Offset(-0.250F, -0.750F,  0.050F);
+        if (type == EntityType.RABBIT)  return new Offset(-0.550F, 0.000F, 0.000F);
+        if (type == EntityType.AXOLOTL) return new Offset(-0.200F,  0.300F,  0.450F);
+        if (type == EntityType.FROG)    return new Offset(-0.300F,  0.300F,  0.300F);
+        if (type == EntityType.POLAR_BEAR) return new Offset(-0.150F, -0.550F, 0.650F);
+        if (type == EntityType.PANDA) return new Offset(0.050F, -0.450F, 0.850F);
 
         if (type == EntityType.HORSE)      return new Offset(-0.200F, -0.450F, 0.700F);
         if (type == EntityType.VILLAGER)   return new Offset(-0.300F, -0.700F, 0.000F);
@@ -143,7 +157,8 @@ public class HandPlacementConfig {
                 EntityType.PIG, EntityType.COW, EntityType.SHEEP,
                 EntityType.WOLF, EntityType.CAT, EntityType.CREEPER,
                 EntityType.ZOMBIE, EntityType.SKELETON, EntityType.ENDERMAN, EntityType.IRON_GOLEM,
-                EntityType.DOLPHIN, EntityType.CHICKEN, EntityType.PARROT, EntityType.SPIDER, EntityType.HORSE, EntityType.VILLAGER
+                EntityType.DOLPHIN, EntityType.CHICKEN, EntityType.PARROT, EntityType.SPIDER, EntityType.HORSE, EntityType.VILLAGER,
+                EntityType.FOX, EntityType.RABBIT, EntityType.AXOLOTL, EntityType.FROG, EntityType.POLAR_BEAR, EntityType.PANDA
         };
     }
 
