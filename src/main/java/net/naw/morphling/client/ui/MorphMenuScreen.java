@@ -19,6 +19,7 @@ import net.minecraft.world.entity.player.PlayerSkin;
 import net.naw.morphling.client.core.EntityRegistry;
 import net.naw.morphling.client.core.MorphState;
 import net.naw.morphling.client.core.MorphVariantManager;
+import net.naw.morphling.client.games.ui.MorphGamesIntroScreen;
 import org.jspecify.annotations.NonNull;
 
 import java.util.ArrayList;
@@ -78,7 +79,7 @@ public class MorphMenuScreen extends Screen {
     );
 
     private static final Set<EntityType<?>> AQUATIC_MOBS = Set.of(
-            EntityType.DOLPHIN
+            EntityType.DOLPHIN, EntityType.AXOLOTL
     );
 
     /** Keybind hints shown in the help drawer, ordered by mob. */
@@ -102,6 +103,12 @@ public class MorphMenuScreen extends Screen {
         KEYBIND_HINTS.put(EntityType.SPIDER, new String[]{"R = leap", "Walk into wall = climb"});
         KEYBIND_HINTS.put(EntityType.SLIME, new String[]{"Space = small hop", "R = big jump", "Contact damage on size 2+"});
         KEYBIND_HINTS.put(EntityType.BEE, new String[]{"Space = toggle flight", "R = sting (poisons, one use)", "Shift+R = roll", "B = pollinate particles + sound", "Shift+B = nectar texture", "F = angry mode"});
+        KEYBIND_HINTS.put(EntityType.FOX, new String[]{"R = sit", "Shift+R = sleep", "Ctrl+R = stalk crouch", "B = ambient", "Shift+B = screech", "Ctrl+B = sniff", "F = pounce"});
+        KEYBIND_HINTS.put(EntityType.RABBIT, new String[]{"R = idle head tilt", "W = hop forward", "Sprint = faster hops"});
+        KEYBIND_HINTS.put(EntityType.AXOLOTL, new String[]{"R = play dead (get Regen)"});
+        KEYBIND_HINTS.put(EntityType.FROG, new String[]{"R = tongue grab", "F = leap", "B = croak"});
+        KEYBIND_HINTS.put(EntityType.POLAR_BEAR, new String[]{"R = rear up (warning roar)"});
+        KEYBIND_HINTS.put(EntityType.PANDA, new String[]{"R = sit", "Shift+R = roll", "Ctrl+R = lie on back", "Shift+B = sneeze"});
     }
 
     private Category activeCategory = Category.ALL;
@@ -159,36 +166,52 @@ public class MorphMenuScreen extends Screen {
         searchBox.setResponder(value -> { this.searchQuery = value.toLowerCase(); scrollOffset = 0; rebuildTiles(); });
         this.addRenderableWidget(searchBox);
 
-        // Help (?) button
+        // Help (?) button — tooltip delayed 50 ticks via DelayedTooltipButton
         int helpBtnSize = 20;
-        this.addRenderableWidget(Button.builder(
+        this.addRenderableWidget(new DelayedTooltipButton(
+                searchX - helpBtnSize - 6, tabY + tabHeight + 6, helpBtnSize, 18,
                 Component.literal("?"),
-                _ -> { helpDrawerOpen = !helpDrawerOpen; drawerScroll = 0; }
-        ).bounds(searchX - helpBtnSize - 6, tabY + tabHeight + 6, helpBtnSize, 18).build());
+                _ -> { helpDrawerOpen = !helpDrawerOpen; drawerScroll = 0; },
+                "Keybind Reference"
+        ));
 
-        // Debug button — opens DebugScreen
-        this.addRenderableWidget(Button.builder(
+        // Debug button — opens DebugScreen; tooltip delayed 50 ticks via DelayedTooltipButton
+        this.addRenderableWidget(new DelayedTooltipButton(
+                searchX - helpBtnSize - 6 - helpBtnSize - 4, tabY + tabHeight + 6, helpBtnSize, 18,
                 Component.literal("§c🐛"),
-                _ -> Minecraft.getInstance().setScreen(new net.naw.morphling.client.debug.DebugScreen())
-        ).bounds(searchX - helpBtnSize - 6 - helpBtnSize - 4, tabY + tabHeight + 6, helpBtnSize, 18).build());
+                _ -> Minecraft.getInstance().setScreen(new net.naw.morphling.client.debug.DebugScreen()),
+                "Debug"
+        ));
 
-        // Background blur toggle
+        // Background blur toggle; tooltip delayed 50 ticks via DelayedTooltipButton
         int blurBtnSize = 20;
-        this.addRenderableWidget(Button.builder(
+        this.addRenderableWidget(new DelayedTooltipButton(
+                searchX + searchWidth + 6, tabY + tabHeight + 6, blurBtnSize, 18,
                 Component.literal(showBackground ? "●" : "○"),
-                btn -> { showBackground = !showBackground; btn.setMessage(Component.literal(showBackground ? "●" : "○")); }
-        ).bounds(searchX + searchWidth + 6, tabY + tabHeight + 6, blurBtnSize, 18).build());
+                btn -> { showBackground = !showBackground; btn.setMessage(Component.literal(showBackground ? "●" : "○")); },
+                "Toggle Background"
+        ));
 
-        // Two-hands toggle
+        // Two-hands toggle; tooltip delayed 50 ticks via DelayedTooltipButton
         int twoHandsBtnSize = 20;
-        this.addRenderableWidget(Button.builder(
+        this.addRenderableWidget(new DelayedTooltipButton(
+                searchX + searchWidth + 6 + blurBtnSize + 4, tabY + tabHeight + 6, twoHandsBtnSize, 18,
                 Component.literal(net.naw.morphling.client.config.TwoHandsConfig.isEnabled() ? "✋✋" : "✋"),
                 btn -> {
                     boolean newVal = !net.naw.morphling.client.config.TwoHandsConfig.isEnabled();
                     net.naw.morphling.client.config.TwoHandsConfig.setEnabled(newVal);
                     btn.setMessage(Component.literal(newVal ? "✋✋" : "✋"));
-                }
-        ).bounds(searchX + searchWidth + 6 + blurBtnSize + 4, tabY + tabHeight + 6, twoHandsBtnSize, 18).build());
+                },
+                "Two Hands Mode"
+        ));
+
+        // Morph Games button — RGB cycling, opens MorphGamesScreen
+        this.addRenderableWidget(new RgbButton(
+                searchX - helpBtnSize - 6 - helpBtnSize - 4 - helpBtnSize - 4,
+                tabY + tabHeight + 6, 20, 18,
+                Component.literal("🎮"),
+                _ -> Minecraft.getInstance().setScreen(new MorphGamesIntroScreen())
+        ));
 
         // Reset to player button
         int resetBtnWidth = 100;
@@ -741,6 +764,121 @@ public class MorphMenuScreen extends Screen {
 
         @Override
         protected void updateWidgetNarration(@NonNull NarrationElementOutput narrationElementOutput) {
+            this.defaultButtonNarrationText(narrationElementOutput);
+        }
+    }
+
+    /**
+     * A standard button with a delayed tooltip — tooltip appears after 50 hover ticks (~2.5s).
+     * Used for all toolbar buttons except RgbButton which has its own render logic.
+     * To change delay: adjust the hoverTicks threshold in extractContents.
+     */
+    public static class DelayedTooltipButton extends Button {
+        private int hoverTicks = 0;
+        private final String tooltipText;
+
+        public DelayedTooltipButton(int x, int y, int width, int height, Component text, OnPress onPress, String tooltipText) {
+            super(x, y, width, height, text, onPress, DEFAULT_NARRATION);
+            this.tooltipText = tooltipText;
+        }
+
+        @Override
+        protected void extractContents(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            this.extractDefaultSprite(graphics);
+            this.extractDefaultLabel(graphics.textRendererForWidget(this, net.minecraft.client.gui.GuiGraphicsExtractor.HoveredTextEffects.NONE));
+            boolean hovered = mouseX >= getX() && mouseX < getX() + width
+                    && mouseY >= getY() && mouseY < getY() + height;
+            if (hovered) hoverTicks++;
+            else hoverTicks = 0;
+            setTooltip(hoverTicks > 50
+                    ? net.minecraft.client.gui.components.Tooltip.create(Component.literal(tooltipText))
+                    : null);
+        }
+
+        @Override
+        public void updateWidgetNarration(@NonNull NarrationElementOutput narrationElementOutput) {
+            this.defaultButtonNarrationText(narrationElementOutput);
+        }
+    }
+
+    /**
+     * RGB cycling button — border and emoji cycle through hue.
+     * On hover: border lights up with the current RGB color, background brightens, cycle speeds up.
+     * On idle: border is dim, only emoji cycles slowly.
+     * Tooltip appears after 50 hover ticks (~2.5s).
+     */
+    public static class RgbButton extends Button {
+        private float hue = 0f;
+        private int hoverTicks = 0;
+        private boolean playedJingle = false;
+        private int jingleTick = 0;
+
+        public RgbButton(int x, int y, int width, int height, Component text, OnPress onPress) {
+            super(x, y, width, height, text, onPress, DEFAULT_NARRATION);
+            setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Morph Games")));
+        }
+
+        @Override
+        protected void extractContents(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            boolean hovered = mouseX >= getX() && mouseX < getX() + width
+                    && mouseY >= getY() && mouseY < getY() + height;
+
+            // Hue cycles faster on hover (0.006) than idle (0.002)
+            hue = (hue + (hovered ? 0.006f : 0.002f)) % 1.0f;
+            int rgb = java.awt.Color.HSBtoRGB(hue, 1.0f, 1.0f);
+            int r = (rgb >> 16) & 0xFF;
+            int g = (rgb >> 8) & 0xFF;
+            int b = rgb & 0xFF;
+            int color = 0xFF000000 | (r << 16) | (g << 8) | b;
+
+            int bgColor = hovered ? 0xFF2A2A2A : 0xFF1A1A1A;
+            graphics.fill(getX(), getY(), getX() + width, getY() + height, bgColor);
+
+            // Border is RGB on hover, dim otherwise
+            int borderColor = hovered ? color : 0xFF2A2A2A;
+            graphics.fill(getX(), getY(), getX() + width, getY() + 1, borderColor);
+            graphics.fill(getX(), getY() + height - 1, getX() + width, getY() + height, borderColor);
+            graphics.fill(getX(), getY(), getX() + 1, getY() + height, borderColor);
+            graphics.fill(getX() + width - 1, getY(), getX() + width, getY() + height, borderColor);
+
+            // Inner glow lines on hover
+            if (hovered) {
+                graphics.fill(getX() + 1, getY() + 1, getX() + width - 1, getY() + 2, color & 0x55FFFFFF);
+                graphics.fill(getX() + 1, getY() + height - 2, getX() + width - 1, getY() + height - 1, color & 0x55FFFFFF);
+            }
+            // Emoji always cycles RGB
+            graphics.centeredText(Minecraft.getInstance().font, getMessage(), getX() + width / 2, getY() + (height - 8) / 2, color);
+
+            if (hovered) hoverTicks++;
+            else hoverTicks = 0;
+// Tooltip shows after 50 ticks (~2.5s) — change 50 to adjust delay
+            setTooltip(hoverTicks > 50
+                    ? net.minecraft.client.gui.components.Tooltip.create(Component.literal("Morph Games"))
+                    : null);
+
+            if (hoverTicks == 1) {
+                playedJingle = false;
+                jingleTick = 0;
+            }
+            if (!playedJingle && hoverTicks > 0) {
+                jingleTick++;
+                var mc = Minecraft.getInstance();
+                if (mc.level != null && mc.player != null) {
+                    if (jingleTick == 1) {
+                        mc.level.playLocalSound(mc.player.getX(), mc.player.getY(), mc.player.getZ(),
+                                net.minecraft.sounds.SoundEvents.NOTE_BLOCK_HARP.value(), net.minecraft.sounds.SoundSource.MASTER, 0.2f, 5f, false);
+                        playedJingle = true;
+                    }
+                }
+            }
+            if (hoverTicks == 0) {
+                playedJingle = false;
+                jingleTick = 0;
+            }
+        }
+
+        @Override
+        public void updateWidgetNarration(@NonNull NarrationElementOutput narrationElementOutput) {
             this.defaultButtonNarrationText(narrationElementOutput);
         }
     }
