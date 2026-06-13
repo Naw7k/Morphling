@@ -43,6 +43,7 @@ public class SheepAbility {
                 SoundEvents.GENERIC_EAT.value(), SoundSource.PLAYERS,
                 0.5F, 1.0F, false
         );
+        MorphState.broadcastSound(SoundEvents.GENERIC_EAT.value(), 0.5F, 1.0F);
 
         if (client.level.getBlockState(below).is(Blocks.GRASS_BLOCK)) {
             pendingGrassPos = below;

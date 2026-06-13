@@ -70,10 +70,13 @@ public class CreeperAbility {
             server.execute(() -> {
                 var serverPlayer = server.getPlayerList().getPlayer(player.getUUID());
                 if (serverPlayer != null) {
+
                     serverPlayer.level().explode(
                             serverPlayer,
                             serverPlayer.getX(), serverPlayer.getY(), serverPlayer.getZ(),
-                            3.0F, Level.ExplosionInteraction.MOB
+                            3.0F, net.naw.morphling.client.games.MobBrawl.BrawlDimension.isBrawlDimension(serverPlayer.level())
+                                    ? Level.ExplosionInteraction.NONE
+                                    : Level.ExplosionInteraction.MOB
                     );
                 }
             });

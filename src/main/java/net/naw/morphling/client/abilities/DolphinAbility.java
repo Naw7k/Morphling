@@ -11,7 +11,7 @@ import net.naw.morphling.client.core.MorphState;
 public class DolphinAbility {
 
     private static int splashCooldown = 0;
-    private static int moistness = 2400;
+    private static int moistness = 2400; // ticks before dry damage (~2 min out of water)
 
     public static void tick(Minecraft client) {
         if (!MorphState.isMorphed()) return;
@@ -24,11 +24,18 @@ public class DolphinAbility {
 
         Player player = client.player;
 
+        // Reset moistness on death so dry damage doesn't persist after respawn
+        if (player.getHealth() <= 0 || player.isDeadOrDying()) {
+            moistness = 2400;
+            return;
+        }
+
         if (player.isInWaterOrRain()) {
             moistness = 2400;
         } else {
             moistness--;
             if (moistness <= 0) {
+                moistness = 0;
                 var server = client.getSingleplayerServer();
                 if (server != null) {
                     server.execute(() -> {
