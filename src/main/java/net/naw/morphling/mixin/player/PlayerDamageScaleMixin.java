@@ -20,6 +20,22 @@ public class PlayerDamageScaleMixin {
     private float morphling$scaleDamage(float damage, ServerLevel level, DamageSource source, float origDamage) {
         Player self = (Player)(Object)this;
 
+        // ── Mob Brawl: Equal Damage mode ──────────────────────────────────────
+        // Caps damage between two players in the same active brawl to a flat 2f
+        // (one heart). Done here as a damage-arg override so it flows through normal
+        // hurtServer — NOT via a re-entrant hurtServer call, which would double-fire
+        // the brawl damage mixin and bypass lethal-death handling.
+        if (source.getEntity() instanceof Player attacker) {
+            var victimGame   = net.naw.morphling.client.games.MobBrawl.MobBrawlServerGame.getByPlayer(self.getUUID());
+            var attackerGame = net.naw.morphling.client.games.MobBrawl.MobBrawlServerGame.getByPlayer(attacker.getUUID());
+            boolean sameBrawl = victimGame != null && attackerGame != null
+                    && victimGame.getPhase() == net.naw.morphling.client.games.MobBrawl.MobBrawlServerGame.Phase.FIGHTING
+                    && victimGame.roomId.equals(attackerGame.roomId);
+            if (sameBrawl && victimGame.getDamageMode() == 1) {
+                return Math.min(damage, 2.0F);
+            }
+        }
+
         // Don't scale damage from other players — only from mobs/environment
         if (source.getEntity() instanceof Player) return damage;
 
