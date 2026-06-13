@@ -25,6 +25,9 @@ public class MorphStepSounds {
         STEP_SOUNDS.put(EntityType.SKELETON, SoundEvents.SKELETON_STEP);
         STEP_SOUNDS.put(EntityType.IRON_GOLEM, SoundEvents.IRON_GOLEM_STEP);
         STEP_SOUNDS.put(EntityType.SPIDER, SoundEvents.SPIDER_STEP);
+        STEP_SOUNDS.put(EntityType.FROG, SoundEvents.FROG_STEP);
+        STEP_SOUNDS.put(EntityType.POLAR_BEAR, SoundEvents.POLAR_BEAR_STEP);
+        STEP_SOUNDS.put(EntityType.PANDA, SoundEvents.PANDA_STEP);
 
         // Horse gallop plays when sprinting instead of regular step
         GALLOP_SOUNDS.put(EntityType.HORSE, SoundEvents.HORSE_GALLOP);
