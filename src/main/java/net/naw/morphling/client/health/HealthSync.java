@@ -66,6 +66,8 @@ public class HealthSync {
         Player player = Minecraft.getInstance().player;
         if (player == null) return;
 
+        if (net.naw.morphling.client.games.MobBrawl.MobBrawlClient.isActive()) return;
+
         boolean morphedNow = MorphState.isMorphed();
 
         if (!morphedNow && wasMorphedLastTick) {
@@ -158,6 +160,8 @@ public class HealthSync {
      */
     public static void onRespawn() {
         if (!MorphState.isMorphed()) return;
+        // Mob Brawl owns health during a fight — don't re-apply morph health on respawn
+        if (net.naw.morphling.client.games.MobBrawl.MobBrawlClient.isActive()) return;
 
         savedRatio = 1.0F;
 
@@ -176,6 +180,8 @@ public class HealthSync {
      * Called when server confirms the new health values for this morphed player.
      */
     public static void onHealthUpdate(float maxHealth, float currentHealth) {
+        // Mob Brawl owns health during a fight — ignore morph health sync
+        if (net.naw.morphling.client.games.MobBrawl.MobBrawlClient.isActive()) return;
         Player player = Minecraft.getInstance().player;
         if (player == null) return;
 
