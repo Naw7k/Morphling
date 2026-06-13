@@ -32,6 +32,27 @@ import java.util.UUID;
 @Mixin(LivingEntityRenderer.class)
 public abstract class PlayerRendererMixin {
 
+    /**
+     * Frog morph moves at baseScale 0.01 (vs player 0.1), so the displacement-driven
+     * walk animation values are ~10x too small for FROG_WALK to be visible.
+     * Speed and position are both amplified by this factor (position is the phase
+     * accumulator — scaling both by the same constant keeps the animation consistent).
+     */
+    @Unique
+    private static final float morphling$FROG_WALK_BOOST = 8.0F;
+
+    /**
+     * Swim speed isn't reduced by the frog's 0.01 ground-movement baseScale the way
+     * walking is, so displacement in water is near-normal and the walk boost makes
+     * FROG_SWIM paddle hyperactively. Water uses this gentler multiplier instead.
+     * Tune: drop toward 1.0F if still frantic, nudge toward 2.5F if sluggish.
+     */
+    @Unique
+    private static final float morphling$FROG_SWIM_BOOST = 1.5F;
+
+    @Unique
+    private static final java.util.Random morphling$SHAKE_RNG = new java.util.Random();
+
     @Inject(
             method = "submit(Lnet/minecraft/client/renderer/entity/state/LivingEntityRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;Lnet/minecraft/client/renderer/state/level/CameraRenderState;)V",
             at = @At("HEAD"),
@@ -48,6 +69,17 @@ public abstract class PlayerRendererMixin {
         if (isLocalPlayer) {
             renderLocalPlayer(avatarState, poseStack, submitNodeCollector, camera, client, ci);
         } else {
+            // Skip any invisible remote player entirely (clean hide, not vanilla's faint
+            // outline). Covers the Mob Brawl 3s death window — server sets the player
+            // invisible and the flag syncs here, whether or not they're morphed.
+            net.minecraft.world.entity.player.Player rp = null;
+            if (client.level != null) {
+                for (net.minecraft.world.entity.player.Player p : client.level.players()) {
+                    if (p.getId() == avatarState.id) { rp = p; break; }
+                }
+            }
+            if (rp != null && rp.isInvisible()) { ci.cancel(); return; }
+
             renderRemotePlayer(avatarState, poseStack, submitNodeCollector, camera, client, ci);
         }
     }
@@ -55,10 +87,16 @@ public abstract class PlayerRendererMixin {
     @Unique
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void renderLocalPlayer(AvatarRenderState state, PoseStack poseStack,
-                                    SubmitNodeCollector submitNodeCollector, CameraRenderState camera,
-                                    Minecraft client, CallbackInfo ci) {
+                                   SubmitNodeCollector submitNodeCollector, CameraRenderState camera,
+                                   Minecraft client, CallbackInfo ci) {
         if (!MorphState.isMorphed()) return;
-        if (client.player.isSpectator()) return;
+        if (client.player == null || client.player.isSpectator()) return;
+
+        // Roulette blink — skip render during invisible phase
+        if (!net.naw.morphling.client.games.MorphRoulette.MorphRouletteGame.getInstance().isBlinkVisible()) {
+            ci.cancel();
+            return;
+        }
 
         FpmCompat.restoreHeadsIfNeeded();
 
@@ -93,9 +131,24 @@ public abstract class PlayerRendererMixin {
 
             WalkAnimationStateAccessor playerAnim = (WalkAnimationStateAccessor) client.player.walkAnimation;
             WalkAnimationStateAccessor morphAnim = (WalkAnimationStateAccessor) livingMorph.walkAnimation;
-            morphAnim.morphling$setSpeed(playerAnim.morphling$getSpeed());
-            morphAnim.morphling$setSpeedOld(playerAnim.morphling$getSpeedOld());
-            morphAnim.morphling$setPosition(playerAnim.morphling$getPosition());
+
+            boolean isFrog = morphEntity instanceof net.minecraft.world.entity.animal.frog.Frog;
+            // Water uses a gentler boost — swim displacement is near-normal unlike ground movement.
+            // FROG_IDLE_WATER (swimIdleAnimationState) is unaffected by walkBoost entirely.
+            float walkBoost = isFrog
+                    ? (client.player.isInWater() ? morphling$FROG_SWIM_BOOST : morphling$FROG_WALK_BOOST)
+                    : 1.0F;
+
+            if (isFrog && !client.player.onGround() && !client.player.isInWater()) {
+                // Airborne frog (leap/fall): no walk cycle — jump animation handles the pose
+                morphAnim.morphling$setSpeed(0.0F);
+                morphAnim.morphling$setSpeedOld(0.0F);
+                morphAnim.morphling$setPosition(playerAnim.morphling$getPosition() * walkBoost);
+            } else {
+                morphAnim.morphling$setSpeed(Math.min(playerAnim.morphling$getSpeed() * walkBoost, 1.0F));
+                morphAnim.morphling$setSpeedOld(Math.min(playerAnim.morphling$getSpeedOld() * walkBoost, 1.0F));
+                morphAnim.morphling$setPosition(playerAnim.morphling$getPosition() * walkBoost);
+            }
 
             // Skeleton bow visual
             if (morphEntity instanceof net.minecraft.world.entity.monster.skeleton.Skeleton skeleton) {
@@ -123,13 +176,47 @@ public abstract class PlayerRendererMixin {
             }
         }
 
+        // Fox mouth item — mirror player's main hand onto cached fox
+        if (morphEntity instanceof net.minecraft.world.entity.animal.fox.Fox fox) {
+            fox.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
+                    client.player.getMainHandItem());
+        }
+
+        // Rabbit hop animation — driven by RabbitAbility (client tick).
+        // Renderer only REFLECTS state; physics/timing live in the tick.
+        // R key toggles the idle head tilt (sitting) animation manually.
+        if (morphEntity instanceof net.minecraft.world.entity.animal.rabbit.Rabbit rabbit) {
+            if (net.naw.morphling.client.abilities.RabbitAbility.isHopping()) {
+                rabbit.hopAnimationState.startIfStopped(client.player.tickCount);
+                rabbit.idleHeadTiltAnimationState.stop();
+            } else {
+                rabbit.hopAnimationState.stop();
+                if (net.naw.morphling.client.abilities.RabbitAbility.isSitting()) {
+                    rabbit.idleHeadTiltAnimationState.startIfStopped(client.player.tickCount);
+                } else {
+                    rabbit.idleHeadTiltAnimationState.stop();
+                }
+            }
+        }
+
         try {
             EntityRenderDispatcher dispatcher = client.getEntityRenderDispatcher();
             EntityRenderer renderer = dispatcher.getRenderer(morphEntity);
             float partialTick = client.getDeltaTracker().getGameTimeDeltaPartialTick(false);
-            
+
             EntityRenderState morphState = renderer.createRenderState(morphEntity, partialTick);
             morphState.lightCoords = state.lightCoords;
+
+            // Frog swim state
+            if (morphState instanceof net.minecraft.client.renderer.entity.state.FrogRenderState frs) {
+                frs.isSwimming = client.player.isInWater();
+            }
+
+            // Panda variant — drives texture selection in PandaRenderer
+            if (morphState instanceof net.minecraft.client.renderer.entity.state.PandaRenderState prs
+                    && morphEntity instanceof net.minecraft.world.entity.animal.panda.Panda panda) {
+                prs.variant = panda.getVariant();
+            }
 
             if (morphEntity instanceof net.minecraft.world.entity.animal.parrot.Parrot p && p.isPartyParrot()) {
                 if (morphState instanceof net.minecraft.client.renderer.entity.state.ParrotRenderState ps) {
@@ -137,13 +224,19 @@ public abstract class PlayerRendererMixin {
                 }
             }
 
+            // Rabbit hop completion float — drives body pitch through jump arc
+            if (morphState instanceof net.minecraft.client.renderer.entity.state.RabbitRenderState rs) {
+                rs.jumpCompletion = client.player.onGround()
+                        ? 0.0F
+                        : (float) Math.clamp(0.5 + client.player.getDeltaMovement().y * 0.8, 0.0, 1.0);
+            }
+
             boolean doShake = morphEntity instanceof net.minecraft.world.entity.monster.EnderMan
                     && EndermanMadMode.isActive();
             if (doShake) {
                 double d = 0.02;
-                java.util.Random rng = new java.util.Random();
                 poseStack.pushPose();
-                poseStack.translate(rng.nextGaussian() * d, 0, rng.nextGaussian() * d);
+                poseStack.translate(morphling$SHAKE_RNG.nextGaussian() * d, 0, morphling$SHAKE_RNG.nextGaussian() * d);
             }
 
             FpmCompat.hideHeadIfNeeded();
@@ -161,8 +254,8 @@ public abstract class PlayerRendererMixin {
     @Unique
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void renderRemotePlayer(AvatarRenderState state, PoseStack poseStack,
-                                     SubmitNodeCollector submitNodeCollector, CameraRenderState camera,
-                                     Minecraft client, CallbackInfo ci) {
+                                    SubmitNodeCollector submitNodeCollector, CameraRenderState camera,
+                                    Minecraft client, CallbackInfo ci) {
         // Find which player this is by looking up their ID in the world
         Player remotePlayer = null;
         if (client.level != null) {
@@ -213,9 +306,43 @@ public abstract class PlayerRendererMixin {
 
             WalkAnimationStateAccessor playerAnim = (WalkAnimationStateAccessor) remotePlayer.walkAnimation;
             WalkAnimationStateAccessor morphAnim = (WalkAnimationStateAccessor) livingMorph.walkAnimation;
-            morphAnim.morphling$setSpeed(playerAnim.morphling$getSpeed());
-            morphAnim.morphling$setSpeedOld(playerAnim.morphling$getSpeedOld());
-            morphAnim.morphling$setPosition(playerAnim.morphling$getPosition());
+
+            boolean isFrog = morphEntity instanceof net.minecraft.world.entity.animal.frog.Frog;
+            // Water uses a gentler boost — swim displacement is near-normal unlike ground movement.
+            // FROG_IDLE_WATER (swimIdleAnimationState) is unaffected by walkBoost entirely.
+            float walkBoost = isFrog
+                    ? (remotePlayer.isInWater() ? morphling$FROG_SWIM_BOOST : morphling$FROG_WALK_BOOST)
+                    : 1.0F;
+
+            if (isFrog && !remotePlayer.onGround() && !remotePlayer.isInWater()) {
+                // Airborne frog (leap/fall): no walk cycle — jump animation handles the pose
+                morphAnim.morphling$setSpeed(0.0F);
+                morphAnim.morphling$setSpeedOld(0.0F);
+                morphAnim.morphling$setPosition(playerAnim.morphling$getPosition() * walkBoost);
+            } else {
+                morphAnim.morphling$setSpeed(Math.min(playerAnim.morphling$getSpeed() * walkBoost, 1.0F));
+                morphAnim.morphling$setSpeedOld(Math.min(playerAnim.morphling$getSpeedOld() * walkBoost, 1.0F));
+                morphAnim.morphling$setPosition(playerAnim.morphling$getPosition() * walkBoost);
+            }
+        }
+
+        // Fox mouth item — mirror remote player's main hand onto cached fox
+        if (morphEntity instanceof net.minecraft.world.entity.animal.fox.Fox fox) {
+            fox.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
+                    remotePlayer.getMainHandItem());
+        }
+
+        // Rabbit hop animation (remote) — derive from the remote player's airborne state.
+        // Their hop physics ran on their own client and replicated here as position/velocity.
+        // Sitting animation driven by synced rabbit_sitting ability state (via applyAbilityStates).
+        if (morphEntity instanceof net.minecraft.world.entity.animal.rabbit.Rabbit rabbit) {
+            if (!remotePlayer.onGround()) {
+                rabbit.hopAnimationState.startIfStopped(remotePlayer.tickCount);
+                rabbit.idleHeadTiltAnimationState.stop();
+            } else {
+                rabbit.hopAnimationState.stop();
+                // Sitting state is applied via RemoteMorphState.applyAbilityStates
+            }
         }
 
         try {
@@ -225,13 +352,30 @@ public abstract class PlayerRendererMixin {
             EntityRenderState morphRenderState = renderer.createRenderState(morphEntity, partialTick);
             morphRenderState.lightCoords = state.lightCoords;
 
+            // Frog swim state (remote)
+            if (morphRenderState instanceof net.minecraft.client.renderer.entity.state.FrogRenderState frs) {
+                frs.isSwimming = remotePlayer.isInWater();
+            }
+
+            // Panda variant (remote)
+            if (morphRenderState instanceof net.minecraft.client.renderer.entity.state.PandaRenderState prs
+                    && morphEntity instanceof net.minecraft.world.entity.animal.panda.Panda panda) {
+                prs.variant = panda.getVariant();
+            }
+
+            // Rabbit hop completion float for remote player
+            if (morphRenderState instanceof net.minecraft.client.renderer.entity.state.RabbitRenderState rs) {
+                rs.jumpCompletion = remotePlayer.onGround()
+                        ? 0.0F
+                        : (float) Math.clamp(0.5 + remotePlayer.getDeltaMovement().y * 0.8, 0.0, 1.0);
+            }
+
             // Enderman mad mode shake for remote player
             boolean doShake = morphEntity instanceof net.minecraft.world.entity.monster.EnderMan && data.endermanMad;
             if (doShake) {
                 double d = 0.02;
-                java.util.Random rng = new java.util.Random();
                 poseStack.pushPose();
-                poseStack.translate(rng.nextGaussian() * d, 0, rng.nextGaussian() * d);
+                poseStack.translate(morphling$SHAKE_RNG.nextGaussian() * d, 0, morphling$SHAKE_RNG.nextGaussian() * d);
             }
 
             FpmCompat.hideHeadIfNeeded();
