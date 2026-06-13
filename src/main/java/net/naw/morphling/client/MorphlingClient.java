@@ -21,6 +21,10 @@ import net.naw.morphling.client.config.HandPlacementConfig;
 import net.naw.morphling.client.core.MorphState;
 import net.naw.morphling.client.core.RemoteMorphState;
 import net.naw.morphling.client.debug.DamageIndicator;
+import net.naw.morphling.client.games.MobBrawl.MobBrawlClient;
+import net.naw.morphling.client.games.packet.GamesNetworking;
+import net.naw.morphling.client.games.ui.RoomBrowserScreen;
+import net.naw.morphling.client.games.packet.RoomsNetworking;
 import net.naw.morphling.client.health.HealthSync;
 import net.naw.morphling.client.hunger.HungerSync;
 import net.naw.morphling.client.ui.MorphMenuScreen;
@@ -59,6 +63,7 @@ public class MorphlingClient implements ClientModInitializer {
     public static KeyMapping abilityKey;
     public static KeyMapping madModeKey;
 
+
     // Cooldown for the manual morph sound (B key) — prevents spam
     private static long lastSoundTime = 0L;
     private static final long SOUND_COOLDOWN_MS = 1500;
@@ -66,6 +71,7 @@ public class MorphlingClient implements ClientModInitializer {
     // After respawn, wait a few ticks before refreshing remote players' hitboxes.
     // Needed because other players may not be fully loaded at the exact respawn moment.
     private static int respawnRefreshTicker = 0;
+
 
     public static final KeyMapping.Category MORPHLING_CATEGORY = KeyMapping.Category.register(
             Identifier.fromNamespaceAndPath("morphling", "general")
@@ -172,7 +178,12 @@ public class MorphlingClient implements ClientModInitializer {
                     payload.horseMarkings(),
                     payload.villagerProfession(),
                     payload.villagerType(),
-                    payload.slimeSize()
+                    payload.slimeSize(),
+                    payload.foxVariant(),
+                    payload.rabbitVariant(),
+                    payload.axolotlVariant(),
+                    payload.frogVariant(),
+                    payload.pandaGene()
             );
 
             // Refresh hitbox for the remote player so their collision matches morph size
@@ -263,6 +274,25 @@ public class MorphlingClient implements ClientModInitializer {
                 case "horse_rearing"       -> data.horseRearing = Boolean.parseBoolean(val);
                 case "horse_eating"        -> data.horseEating = Boolean.parseBoolean(val);
                 case "bee_angry" -> data.beeAngry = Boolean.parseBoolean(val);
+                case "fox_sitting"    -> data.foxSitting = Boolean.parseBoolean(val);
+                case "fox_sleeping"   -> data.foxSleeping = Boolean.parseBoolean(val);
+                case "fox_crouching"  -> data.foxCrouching = Boolean.parseBoolean(val);
+                case "fox_interested" -> data.foxInterested = Boolean.parseBoolean(val);
+                case "fox_pouncing"   -> data.foxPouncing = Boolean.parseBoolean(val);
+                case "rabbit_sitting" -> data.rabbitSitting = Boolean.parseBoolean(val);
+                case "polar_bear_standing" -> data.polarBearStanding = Boolean.parseBoolean(val);
+                case "panda_sitting"   -> data.pandaSitting  = Boolean.parseBoolean(val);
+                case "panda_on_back"   -> data.pandaOnBack   = Boolean.parseBoolean(val);
+                case "panda_rolling"   -> data.pandaRolling  = Boolean.parseBoolean(val);
+                case "panda_sneezing"  -> {
+                    data.pandaSneezing = Boolean.parseBoolean(val);
+                    if (!data.pandaSneezing) data.pandaSneezeCounter = 0;
+                }
+                case "panda_eating"    -> data.pandaEating = Boolean.parseBoolean(val);
+                case "axolotl_playdead" -> data.axolotlPlayingDead = Boolean.parseBoolean(val);
+                case "frog_croaking"    -> data.frogCroaking = Boolean.parseBoolean(val);
+                case "frog_leaping"     -> data.frogLeaping  = Boolean.parseBoolean(val);
+                case "frog_tongue"      -> data.frogTongue   = Boolean.parseBoolean(val);
                 case "bee_nectar" -> data.beeNectar = Boolean.parseBoolean(val);
                 case "bee_roll" -> { try { data.beeRollAmount = Float.parseFloat(val); } catch (Exception ignored) {} }
                 case "villager_unhappy"    -> data.villagerUnhappy = Boolean.parseBoolean(val);
@@ -333,6 +363,14 @@ public class MorphlingClient implements ClientModInitializer {
             MultiplayerCheck.serverHasMorphling = false;
             RemoteMorphState.clear();
             MorphState.clearOnDisconnect();
+
+            // Clear last joined room so room browser opens fresh on rejoin
+            RoomBrowserScreen.lastJoinedRoomId = null;
+            RoomBrowserScreen.lastRoomHost     = null;
+            RoomBrowserScreen.lastRoomPlayers  = new String[0];
+            RoomBrowserScreen.lastRoomName     = null;
+            RoomBrowserScreen.roomInProgress   = false;
+
             // If in spectator, clear saved morph in NBT too
             Minecraft mc = Minecraft.getInstance();
             if (mc.player != null && mc.player.isSpectator()) {
@@ -347,6 +385,16 @@ public class MorphlingClient implements ClientModInitializer {
                 }
             }
         });
+
+        // Clear brawl session on reconnect to prevent stale HUD
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.JOIN.register((_, _, client) ->
+                client.execute(MobBrawlClient::clearSession));
+
+        // ── Games networking ─────────────────────────────────────────────────
+        GamesNetworking.registerClient();
+        RoomsNetworking.registerClient();
+
+        net.naw.morphling.client.games.MobBrawl.MobBrawlNetworking.registerClient();
 
         // ── Keybinds ──────────────────────────────────────────────────────────
         openMenuKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
@@ -380,8 +428,8 @@ public class MorphlingClient implements ClientModInitializer {
         DamageIndicator.register();
 
         // ── START_CLIENT_TICK: skeleton bow Q-drop prevention ─────────────────
-        // Consuming the drop key here prevents the Skeleton Bow from being dropped
-        // while equipped. The bow is a fake item that should never leave inventory.
+// Consuming the drop key here prevents the Skeleton Bow from being dropped
+// while equipped. The bow is a fake item that should never leave inventory.
         ClientTickEvents.START_CLIENT_TICK.register(client -> {
             if (SkeletonAbility.isBowEquipped() && client.player != null) {
                 net.minecraft.world.item.ItemStack held = client.player.getMainHandItem();
@@ -473,6 +521,16 @@ public class MorphlingClient implements ClientModInitializer {
             SpiderAbility.tick(client);
             SlimeAbility.tick(client);
             BeeAbility.tick(client);
+            FoxAbility.tick(client);
+            RabbitAbility.tick(client);
+            AxolotlAbility.tick(client);
+            AxolotlAbility.tickAnimators(client);
+            FrogAbility.tick(client);
+            FrogAbility.tickAnimators(client);
+            PolarBearAbility.tick(client);
+            PolarBearAbility.tickAnimators(client);
+            PandaAbility.tick(client);
+            PandaAbility.tickAnimators(client);
             MorphState.tickBeeFall();
 
             if (MorphState.getCurrentMorph() == EntityType.ENDERMAN && client.player != null && client.player.isInWater()) {
@@ -488,11 +546,52 @@ public class MorphlingClient implements ClientModInitializer {
             HealthSync.tick();
             HungerSync.tick();
 
+            // Tick roulette game — runs at server tick rate (20/s) for accurate countdown
+            // Only tick when no screen is open so pause overlay actually pauses the game
+            var rouletteGame = net.naw.morphling.client.games.MorphRoulette.MorphRouletteGame.getInstance();
+            net.naw.morphling.client.games.MobBrawl.MobBrawlClient.tick(0.05f);
+            if (client.screen == null) {
+                rouletteGame.tick(0.05f);
+            }
+
+            if (rouletteGame.shouldShowEndScreen() && client.screen == null) {
+                rouletteGame.markEndScreenShown();
+                if (client.level != null && client.player != null) {
+                    client.level.playLocalSound(client.player.getX(), client.player.getY(), client.player.getZ(),
+                            net.minecraft.sounds.SoundEvents.NOTE_BLOCK_BASS.value(),
+                            net.minecraft.sounds.SoundSource.PLAYERS, 0.6f, 0.8f, false);
+                    client.level.playLocalSound(client.player.getX(), client.player.getY(), client.player.getZ(),
+                            net.minecraft.sounds.SoundEvents.NOTE_BLOCK_CHIME.value(),
+                            net.minecraft.sounds.SoundSource.PLAYERS, 0.6f, 1.8f, false);
+                }
+                client.setScreen(new net.naw.morphling.client.games.MorphRoulette.MorphRouletteScreen(
+                        rouletteGame.getScore(), rouletteGame.getSpinCount()));
+            }
+
+
+
             // ── Open morph menu (G) ──────────────────────────────────────────
             while (openMenuKey.consumeClick()) {
+                // Block all morph menu interaction during countdown and fight start
+                if (net.naw.morphling.client.games.MobBrawl.MobBrawlClient.isInCountdown()) continue;
+                if (net.naw.morphling.client.games.MobBrawl.MobBrawlClient.getCountdownFlash() > 0f) continue;
+
+                //noinspection IfCanBeSwitch
                 if (client.screen == null) {
-                    client.setScreen(new MorphMenuScreen());
+
+                    if (net.naw.morphling.client.games.MorphRoulette.MorphRouletteGame.getInstance().isRunning()) {
+                        client.setScreen(new net.naw.morphling.client.games.MorphRoulette.MorphRouletteScreen());
+                    } else if (net.naw.morphling.client.games.MobBrawl.MobBrawlClient.isActive() && net.naw.morphling.client.games.MobBrawl.MobBrawlClient.getCountdownFlash() <= 0f) {
+                        client.setScreen(new net.naw.morphling.client.games.MobBrawl.MobBrawlPauseScreen());
+                    } else if (!net.naw.morphling.client.games.MobBrawl.MobBrawlClient.isInCountdown()) {
+                        client.setScreen(new MorphMenuScreen());
+                    }
+
                 } else if (client.screen instanceof MorphMenuScreen) {
+                    client.setScreen(null);
+                } else if (client.screen instanceof net.naw.morphling.client.games.MorphRoulette.MorphRouletteScreen) {
+                    client.setScreen(null);
+                } else if (client.screen instanceof net.naw.morphling.client.games.MobBrawl.MobBrawlPauseScreen) {
                     client.setScreen(null);
                 }
             }
@@ -545,7 +644,19 @@ public class MorphlingClient implements ClientModInitializer {
                     if (shift) BeeAbility.toggleNectar();
                     else BeeAbility.triggerPollinate(client);
 
-                    // ── All others — generic ambient sound ───────────────────────
+                } else if (MorphState.getCurrentMorph() == EntityType.FOX) {
+                    long now = System.currentTimeMillis();
+                    if (shift) { if (now - lastSoundTime >= SOUND_COOLDOWN_MS) { lastSoundTime = now; FoxAbility.playScreech(client); } }
+                    else if (ctrl) FoxAbility.playSniff(client);
+                    else playMorphSound(client);
+
+                } else if (MorphState.getCurrentMorph() == EntityType.FROG) {
+                    FrogAbility.triggerCroak(client);
+                } else if (MorphState.getCurrentMorph() == EntityType.PANDA) {
+                    if (shift) PandaAbility.triggerSneeze(client);
+                    else playMorphSound(client);
+
+                    // ── All others — generic ambient sound ───────────────────────────────────
                 } else {
                     playMorphSound(client);
                 }
@@ -561,6 +672,11 @@ public class MorphlingClient implements ClientModInitializer {
                     WolfAngryMode.toggle();
                 } else if (MorphState.getCurrentMorph() == EntityType.BEE) {
                     BeeAbility.toggleAngry();
+
+                } else if (MorphState.getCurrentMorph() == EntityType.FOX) {
+                    FoxAbility.triggerPounce(client);
+                } else if (MorphState.getCurrentMorph() == EntityType.FROG) {
+                    FrogAbility.triggerLeap(client);
                 }
             }
 
@@ -615,6 +731,23 @@ public class MorphlingClient implements ClientModInitializer {
                 } else if (MorphState.getCurrentMorph() == EntityType.BEE) {
                     if (shift) BeeAbility.triggerRoll();
                     else BeeAbility.triggerSting(client);
+                } else if (MorphState.getCurrentMorph() == EntityType.FOX) {
+                    if (shift) FoxAbility.toggleSleep(client);
+                    else if (ctrl) FoxAbility.toggleCrouch(client);
+                    else FoxAbility.toggleSit(client);
+                } else if (MorphState.getCurrentMorph() == EntityType.RABBIT) {
+                    RabbitAbility.toggleSit();
+                } else if (MorphState.getCurrentMorph() == EntityType.AXOLOTL) {
+                    AxolotlAbility.togglePlayDead(client);
+                } else if (MorphState.getCurrentMorph() == EntityType.FROG) {
+                    FrogAbility.triggerTongue(client);
+                } else if (MorphState.getCurrentMorph() == EntityType.POLAR_BEAR) {
+                    PolarBearAbility.toggleStand(client);
+                } else if (MorphState.getCurrentMorph() == EntityType.PANDA) {
+                    if (shift) PandaAbility.triggerRoll(client);
+                    else if (ctrl) PandaAbility.toggleOnBack(client);
+                    else PandaAbility.toggleSit(client);
+
                 } else {
                     MobAbilities.trigger(client);
                 }
@@ -714,6 +847,12 @@ public class MorphlingClient implements ClientModInitializer {
             boolean drawing = client.player.isUsingItem() &&
                     client.player.getUseItem().getItem() instanceof net.minecraft.world.item.BowItem;
             MorphState.sendAbilityState("skeleton_drawing", String.valueOf(drawing));
+        }
+        // Sync frog animation states so other players see croak/leap/tongue animations
+        if (MorphState.getCurrentMorph() == EntityType.FROG) {
+            MorphState.sendAbilityState("frog_croaking", String.valueOf(FrogAbility.isCroaking()));
+            MorphState.sendAbilityState("frog_leaping",  String.valueOf(FrogAbility.isLeaping()));
+            MorphState.sendAbilityState("frog_tongue",   String.valueOf(FrogAbility.isTonguing()));
         }
     }
 }
