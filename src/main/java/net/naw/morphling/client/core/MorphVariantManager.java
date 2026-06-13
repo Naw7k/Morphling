@@ -6,14 +6,17 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.animal.axolotl.Axolotl;
 import net.minecraft.world.entity.animal.chicken.ChickenVariant;
 import net.minecraft.world.entity.animal.cow.Cow;
 import net.minecraft.world.entity.animal.cow.CowVariant;
 import net.minecraft.world.entity.animal.equine.Horse;
 import net.minecraft.world.entity.animal.feline.Cat;
 import net.minecraft.world.entity.animal.feline.CatVariant;
+import net.minecraft.world.entity.animal.fox.Fox;
 import net.minecraft.world.entity.animal.parrot.Parrot;
 import net.minecraft.world.entity.animal.pig.PigVariant;
+import net.minecraft.world.entity.animal.rabbit.Rabbit;
 import net.minecraft.world.entity.animal.sheep.Sheep;
 import net.minecraft.world.entity.animal.wolf.Wolf;
 import net.minecraft.world.entity.animal.wolf.WolfVariant;
@@ -48,7 +51,12 @@ public class MorphVariantManager {
                 || type == EntityType.CHICKEN
                 || type == EntityType.HORSE
                 || type == EntityType.VILLAGER
-                || type == EntityType.SLIME;
+                || type == EntityType.SLIME
+                || type == EntityType.FOX
+                || type == EntityType.RABBIT
+                || type == EntityType.AXOLOTL
+                || type == EntityType.FROG
+                || type == EntityType.PANDA;
     }
 
     /** Serialize all current variants to a single comma-separated string for NBT storage */
@@ -65,7 +73,11 @@ public class MorphVariantManager {
         String villagerProf = currentVillagerProfession != null ? currentVillagerProfession.unwrapKey().orElseThrow().identifier().toString() : "";
         String villagerType = currentVillagerType != null ? currentVillagerType.unwrapKey().orElseThrow().identifier().toString() : "";
         String slime = String.valueOf(currentSlimeSize);
-        return String.join("|", parrot, cat, wolf, cow, sheep, pig, chicken, horseColor, horseMarkings, villagerProf, villagerType, slime);
+        String fox = currentFoxVariant != null ? currentFoxVariant.name() : "RED";
+        String rabbit = currentRabbitVariant != null ? currentRabbitVariant.name() : "BROWN";
+        String axolotl = currentAxolotlVariant != null ? currentAxolotlVariant.name() : "LUCY";
+        String frog = currentFrogVariant != null ? currentFrogVariant.unwrapKey().orElseThrow().identifier().toString() : "";
+        return String.join("|", parrot, cat, wolf, cow, sheep, pig, chicken, horseColor, horseMarkings, villagerProf, villagerType, slime, fox, rabbit, axolotl, frog);
     }
 
 
@@ -73,7 +85,7 @@ public class MorphVariantManager {
     public static void deserializeVariants(String data) {
         if (data == null || data.isEmpty()) return;
         String[] parts = data.split("\\|", -1);
-        if (parts.length < 12) return;
+        if (parts.length < 15) return;
 
         try {
             // Parrot
@@ -169,6 +181,29 @@ public class MorphVariantManager {
             // Slime size
             if (!parts[11].isEmpty()) currentSlimeSize = Integer.parseInt(parts[11]);
         } catch (Exception ignored) {}
+
+        try {
+            // Fox
+            if (!parts[12].isEmpty()) currentFoxVariant = Fox.Variant.valueOf(parts[12]);
+        } catch (Exception ignored) {}
+
+        try {
+            if (!parts[13].isEmpty()) currentRabbitVariant = Rabbit.Variant.valueOf(parts[13]);
+        } catch (Exception ignored) {}
+
+        try {
+            if (!parts[14].isEmpty()) currentAxolotlVariant = Axolotl.Variant.valueOf(parts[14]);
+        } catch (Exception ignored) {}
+
+        try {
+            // Frog
+            if (parts.length > 15 && !parts[15].isEmpty() && Minecraft.getInstance().level != null) {
+                currentFrogVariant = Minecraft.getInstance().level.registryAccess()
+                        .lookupOrThrow(net.minecraft.core.registries.Registries.FROG_VARIANT)
+                        .get(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.FROG_VARIANT, net.minecraft.resources.Identifier.parse(parts[15])))
+                        .orElse(null);
+            }
+        } catch (Exception ignored) {}
     }
 
 
@@ -199,6 +234,18 @@ public class MorphVariantManager {
             if (currentVillagerType != null) v.setVillagerData(v.getVillagerData().withType(currentVillagerType));
         } else if (entity instanceof net.minecraft.world.entity.monster.Slime slime) {
             slime.setSize(currentSlimeSize, false);
+        } else if (entity instanceof Fox fox) {
+            ((net.naw.morphling.mixin.accessors.FoxVariantAccessor) fox).morphling$setVariant(currentFoxVariant);
+        } else if (entity instanceof Rabbit rabbit) {
+            ((net.naw.morphling.mixin.accessors.RabbitVariantAccessor) rabbit).morphling$setVariant(currentRabbitVariant);
+        } else if (entity instanceof Axolotl axolotl) {
+            ((net.naw.morphling.mixin.accessors.AxolotlVariantAccessor) axolotl).morphling$setVariant(currentAxolotlVariant);
+        } else if (entity instanceof net.minecraft.world.entity.animal.frog.Frog frog) {
+            if (currentFrogVariant != null)
+                ((net.naw.morphling.mixin.accessors.FrogVariantAccessor) frog).morphling$setVariant(currentFrogVariant);
+        } else if (entity instanceof net.minecraft.world.entity.animal.panda.Panda panda) {
+            panda.setMainGene(currentPandaGene);
+            panda.setHiddenGene(currentPandaGene);
         }
     }
 
@@ -360,6 +407,53 @@ public class MorphVariantManager {
                 .lookupOrThrow(net.minecraft.core.registries.Registries.VILLAGER_TYPE).listElements().toList();
     }
 
+    // Fox — RED or SNOW
+    private static Fox.Variant currentFoxVariant = Fox.Variant.RED;
+
+    // Rabbit — BROWN, WHITE, BLACK, WHITE_SPLOTCHED, GOLD, SALT, EVIL
+    private static Rabbit.Variant currentRabbitVariant = Rabbit.Variant.BROWN;
+
+    // Axolotl — LUCY, WILD, GOLD, CYAN, BLUE
+    private static Axolotl.Variant currentAxolotlVariant = Axolotl.Variant.LUCY;
+
+    public static void setFoxVariant(Fox.Variant variant) {
+        currentFoxVariant = variant;
+        Entity cached = MorphState.getCachedEntity();
+        if (cached instanceof Fox f)
+            ((net.naw.morphling.mixin.accessors.FoxVariantAccessor) f).morphling$setVariant(variant);
+        playVariantChangeSound();
+    }
+    public static Fox.Variant getFoxVariant() { return currentFoxVariant; }
+
+    public static void setAxolotlVariant(Axolotl.Variant variant) {
+        currentAxolotlVariant = variant;
+        Entity cached = MorphState.getCachedEntity();
+        if (cached instanceof Axolotl a)
+            ((net.naw.morphling.mixin.accessors.AxolotlVariantAccessor) a).morphling$setVariant(variant);
+        playVariantChangeSound();
+    }
+    public static Axolotl.Variant getAxolotlVariant() { return currentAxolotlVariant; }
+
+    public static void setRabbitVariant(Rabbit.Variant variant) {
+        currentRabbitVariant = variant;
+        Entity cached = MorphState.getCachedEntity();
+        if (cached instanceof Rabbit r)
+            ((net.naw.morphling.mixin.accessors.RabbitVariantAccessor) r).morphling$setVariant(variant);
+        if (variant == Rabbit.Variant.EVIL) {
+            // Play killer bunny attack sound when selecting evil variant
+            var mc = net.minecraft.client.Minecraft.getInstance();
+            if (mc.level != null && mc.player != null) {
+                mc.level.playLocalSound(mc.player.getX(), mc.player.getY(), mc.player.getZ(),
+                        net.minecraft.sounds.SoundEvents.RABBIT_ATTACK,
+                        net.minecraft.sounds.SoundSource.PLAYERS, 1.0F, 0.8F, false);
+                MorphState.broadcastSound(net.minecraft.sounds.SoundEvents.RABBIT_ATTACK, 1.0F, 0.8F);
+            }
+        } else {
+            playVariantChangeSound();
+        }
+    }
+    public static Rabbit.Variant getRabbitVariant() { return currentRabbitVariant; }
+
     // Slime — size variant (1 = tiny, 2 = small, 4 = big)
     private static int currentSlimeSize = 2;
 
@@ -371,5 +465,40 @@ public class MorphVariantManager {
         }
         playVariantChangeSound();
     }
+
     public static int getSlimeSize() { return currentSlimeSize; }
+
+
+    // Frog — TEMPERATE, WARM, COLD (registry-based like cat/wolf)
+    private static net.minecraft.core.Holder<net.minecraft.world.entity.animal.frog.FrogVariant> currentFrogVariant = null;
+
+    public static void setFrogVariant(net.minecraft.core.Holder<net.minecraft.world.entity.animal.frog.FrogVariant> variant) {
+        currentFrogVariant = variant;
+        Entity cached = MorphState.getCachedEntity();
+        if (cached instanceof net.minecraft.world.entity.animal.frog.Frog f)
+            ((net.naw.morphling.mixin.accessors.FrogVariantAccessor) f).morphling$setVariant(variant);
+        playVariantChangeSound();
+    }
+    public static net.minecraft.core.Holder<net.minecraft.world.entity.animal.frog.FrogVariant> getFrogVariant() { return currentFrogVariant; }
+    public static java.util.List<net.minecraft.core.Holder.Reference<net.minecraft.world.entity.animal.frog.FrogVariant>> getFrogVariantList() {
+        assert Minecraft.getInstance().level != null;
+        return Minecraft.getInstance().level.registryAccess()
+                .lookupOrThrow(net.minecraft.core.registries.Registries.FROG_VARIANT).listElements().toList();
+    }
+
+    // Panda — gene determines texture and behavior (NORMAL, LAZY, WORRIED, PLAYFUL, BROWN, WEAK, AGGRESSIVE)
+    private static net.minecraft.world.entity.animal.panda.Panda.Gene currentPandaGene =
+            net.minecraft.world.entity.animal.panda.Panda.Gene.NORMAL;
+
+    public static void setPandaGene(net.minecraft.world.entity.animal.panda.Panda.Gene gene) {
+        currentPandaGene = gene;
+        Entity cached = MorphState.getCachedEntity();
+        if (cached instanceof net.minecraft.world.entity.animal.panda.Panda panda) {
+            panda.setMainGene(gene);
+            panda.setHiddenGene(gene);
+        }
+        playVariantChangeSound();
+    }
+    public static net.minecraft.world.entity.animal.panda.Panda.Gene getPandaGene() { return currentPandaGene; }
+
 }
