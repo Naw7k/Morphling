@@ -1,8 +1,11 @@
 package net.naw.morphling.client.ui;
 
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.animal.axolotl.Axolotl;
 import net.minecraft.world.entity.animal.cow.Cow;
+import net.minecraft.world.entity.animal.fox.Fox;
 import net.minecraft.world.entity.animal.parrot.Parrot;
+import net.minecraft.world.entity.animal.rabbit.Rabbit;
 import net.minecraft.world.entity.animal.sheep.Sheep;
 import net.naw.morphling.client.core.MorphState;
 import net.naw.morphling.client.core.MorphVariantManager;
@@ -39,6 +42,16 @@ public class VariantViewBuilder {
             buildVillager(screenWidth, adder, onSelect);
         } else if (mobType == EntityType.SLIME) {
             buildSlime(screenWidth, adder, onSelect);
+        } else if (mobType == EntityType.FOX) {
+            buildFox(screenWidth, adder, onSelect);
+        } else if (mobType == EntityType.RABBIT) {
+            buildRabbit(screenWidth, adder, onSelect);
+        } else if (mobType == EntityType.AXOLOTL) {
+            buildAxolotl(screenWidth, adder, onSelect);
+        } else if (mobType == EntityType.FROG) {
+            buildFrog(screenWidth, adder, onSelect);
+        } else if (mobType == EntityType.PANDA) {
+            buildPanda(screenWidth, adder, onSelect);
         }
     }
 
@@ -261,6 +274,86 @@ public class VariantViewBuilder {
                     },
                     selected,
                     () -> { MorphVariantManager.setSlimeSize(size); MorphState.setMorph(EntityType.SLIME); onSelect.run(); }
+            ));
+        }
+    }
+
+    private static void buildFox(int screenWidth, WidgetAdder adder, Runnable onSelect) {
+        var variants = Fox.Variant.values();
+        int startX = gridStartX(screenWidth, variants.length);
+        int startY = TOP_BAR_HEIGHT + 25;
+        for (int i = 0; i < variants.length; i++) {
+            var v = variants[i];
+            int x = startX + i * (TILE_SIZE + TILE_SPACING);
+            adder.add(new VariantTile(x, startY, TILE_SIZE, EntityType.FOX,
+                    e -> ((net.naw.morphling.mixin.accessors.FoxVariantAccessor) e).morphling$setVariant(v),
+                    MorphVariantManager.getFoxVariant() == v,
+                    () -> { MorphVariantManager.setFoxVariant(v); MorphState.setMorph(EntityType.FOX); onSelect.run(); }
+            ));
+        }
+    }
+
+    private static void buildRabbit(int screenWidth, WidgetAdder adder, Runnable onSelect) {
+        var variants = Rabbit.Variant.values();
+        int startX = gridStartX(screenWidth, variants.length);
+        int startY = TOP_BAR_HEIGHT + 25;
+        for (int i = 0; i < variants.length; i++) {
+            var v = variants[i];
+            int x = startX + i * (TILE_SIZE + TILE_SPACING);
+            adder.add(new VariantTile(x, startY, TILE_SIZE, EntityType.RABBIT,
+                    e -> ((net.naw.morphling.mixin.accessors.RabbitVariantAccessor) e).morphling$setVariant(v),
+                    MorphVariantManager.getRabbitVariant() == v,
+                    () -> { MorphVariantManager.setRabbitVariant(v); MorphState.setMorph(EntityType.RABBIT); onSelect.run(); }
+            ));
+        }
+    }
+
+    private static void buildAxolotl(int screenWidth, WidgetAdder adder, Runnable onSelect) {
+        var variants = Axolotl.Variant.values();
+        int startX = gridStartX(screenWidth, variants.length);
+        int startY = TOP_BAR_HEIGHT + 25;
+        for (int i = 0; i < variants.length; i++) {
+            var v = variants[i];
+            int x = startX + i * (TILE_SIZE + TILE_SPACING);
+            adder.add(new VariantTile(x, startY, TILE_SIZE, EntityType.AXOLOTL,
+                    e -> ((net.naw.morphling.mixin.accessors.AxolotlVariantAccessor) e).morphling$setVariant(v),
+                    MorphVariantManager.getAxolotlVariant() == v,
+                    () -> { MorphVariantManager.setAxolotlVariant(v); MorphState.setMorph(EntityType.AXOLOTL); onSelect.run(); }
+            ));
+        }
+    }
+
+    private static void buildFrog(int screenWidth, WidgetAdder adder, Runnable onSelect) {
+        var variants = MorphVariantManager.getFrogVariantList();
+        int startX = gridStartX(screenWidth, variants.size());
+        int startY = TOP_BAR_HEIGHT + 25;
+        for (int i = 0; i < variants.size(); i++) {
+            var v = variants.get(i);
+            int x = startX + i * (TILE_SIZE + TILE_SPACING);
+            adder.add(new VariantTile(x, startY, TILE_SIZE, EntityType.FROG,
+                    e -> ((net.naw.morphling.mixin.accessors.FrogVariantAccessor) e).morphling$setVariant(v),
+                    MorphVariantManager.getFrogVariant() == v,
+                    () -> { MorphVariantManager.setFrogVariant(v); MorphState.setMorph(EntityType.FROG); onSelect.run(); }
+            ));
+        }
+    }
+
+    private static void buildPanda(int screenWidth, WidgetAdder adder, Runnable onSelect) {
+        var genes = net.minecraft.world.entity.animal.panda.Panda.Gene.values();
+        int startX = gridStartX(screenWidth, genes.length);
+        int startY = TOP_BAR_HEIGHT + 25;
+        for (int i = 0; i < genes.length; i++) {
+            var g = genes[i];
+            int x = startX + i * (TILE_SIZE + TILE_SPACING);
+            adder.add(new VariantTile(x, startY, TILE_SIZE, EntityType.PANDA,
+                    e -> {
+                        if (e instanceof net.minecraft.world.entity.animal.panda.Panda p) {
+                            p.setMainGene(g);
+                            p.setHiddenGene(g);
+                        }
+                    },
+                    MorphVariantManager.getPandaGene() == g,
+                    () -> { MorphVariantManager.setPandaGene(g); MorphState.setMorph(EntityType.PANDA); onSelect.run(); }
             ));
         }
     }
