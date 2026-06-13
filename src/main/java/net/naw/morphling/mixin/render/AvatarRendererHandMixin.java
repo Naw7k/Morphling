@@ -175,6 +175,27 @@ public abstract class AvatarRendererHandMixin {
             if (wing != null) return wing;
         }
 
+        // Rabbit — single "frontlegs" part nested under body
+        if (morphType == EntityType.RABBIT) {
+            try {
+                // Walk all declared fields across the class hierarchy to find "root"
+                Class<?> cls = model.getClass();
+                while (cls != null && cls != Object.class) {
+                    for (Field f : cls.getDeclaredFields()) {
+                        if (f.getType() == ModelPart.class) {
+                            f.setAccessible(true);
+                            ModelPart candidate = (ModelPart) f.get(model);
+                            if (candidate == null) continue;
+                            try {
+                                return candidate.getChild("body").getChild("frontlegs");
+                            } catch (Exception ignored) {}
+                        }
+                    }
+                    cls = cls.getSuperclass();
+                }
+            } catch (Exception ignored) {}
+        }
+
         if (model instanceof HumanoidModel<?> humanoid) {
             return rightSide ? humanoid.rightArm : humanoid.leftArm;
         }
