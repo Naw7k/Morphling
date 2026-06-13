@@ -78,7 +78,9 @@ public class RemoteMorphState {
         public boolean ironGolemAttacking = false; // set true on hit, consumed in applyAbilityStates
         public boolean sheepEating = false;
         public int sheepEatTick = 0;
+        public boolean sheepEatApplied = false;
         public boolean horseRearing = false;
+        public boolean horseRearApplied = false;
         public boolean horseEating = false;
         public boolean villagerUnhappy = false;
         public boolean villagerSleeping = false;
@@ -87,9 +89,32 @@ public class RemoteMorphState {
         public boolean beeNectar = false;
         public float beeRollAmount = 0.0F;
 
+        // Fox pose states
+        public boolean foxSitting = false;
+        public boolean foxSleeping = false;
+        public boolean foxCrouching = false;
+        public boolean foxInterested = false;
+        public boolean foxPouncing = false;
+        public String foxVariant = "RED";
+        public String rabbitVariant = "BROWN";
+        public boolean rabbitSitting = false;
+        public String axolotlVariant = "LUCY";
+        public String frogVariant = "";
+        public boolean axolotlPlayingDead = false;
+        public boolean polarBearStanding = false;
+        public boolean pandaSitting      = false;
+        public boolean pandaOnBack       = false;
+        public boolean pandaRolling      = false;
+        public boolean pandaSneezing     = false;
+        public int     pandaSneezeCounter = 0;
+        public boolean pandaEating        = false;
+        public boolean frogCroaking = false;
+        public boolean frogLeaping  = false;
+        public boolean frogTongue   = false;
+
         // Animation tick counters for rate-limiting remote animation updates
         public int ironGolemAnimTicker = 0;
-        public int sheepAnimTicker = 0;
+        public int lastAnimTick = -1; // last remote tickCount we stepped animations on
     }
 
     private static final Map<UUID, PlayerMorphData> states = new HashMap<>();
@@ -118,6 +143,7 @@ public class RemoteMorphState {
     /**
      * Sets or updates a remote player's morph and variant data.
      * Creates a new cached entity for rendering and resets all ability states.
+     * foxVariant added as the 14th parameter.
      */
     public static void setMorph(UUID uuid, EntityType<?> type, String parrotVariant,
                                 String catVariant, String wolfVariant,
@@ -125,7 +151,7 @@ public class RemoteMorphState {
                                 String pigVariant, String chickenVariant,
                                 String horseColor, String horseMarkings,
                                 String villagerProfession, String villagerType,
-                                String slimeSize) {
+                                String slimeSize, String foxVariant, String rabbitVariant, String axolotlVariant, String frogVariant, String pandaGene) {
         PlayerMorphData data = getOrCreate(uuid);
         data.morphType = type;
         data.cachedEntity = null;
@@ -154,6 +180,29 @@ public class RemoteMorphState {
         data.beeAngry = false;
         data.beeNectar = false;
         data.beeRollAmount = 0.0F;
+        // Fox pose reset
+        data.foxSitting = false;
+        data.foxSleeping = false;
+        data.foxCrouching = false;
+        data.foxInterested = false;
+        data.foxPouncing = false;
+        data.foxVariant = foxVariant != null && !foxVariant.isEmpty() ? foxVariant : "RED";
+        data.rabbitVariant = rabbitVariant != null && !rabbitVariant.isEmpty() ? rabbitVariant : "BROWN";
+        data.rabbitSitting = false;
+        data.axolotlVariant = axolotlVariant != null && !axolotlVariant.isEmpty() ? axolotlVariant : "LUCY";
+        data.frogVariant = frogVariant != null ? frogVariant : "";
+        data.axolotlPlayingDead = false;
+        data.frogCroaking = false;
+        data.frogLeaping  = false;
+        data.frogTongue   = false;
+
+        data.polarBearStanding = false;
+        data.pandaSitting      = false;
+        data.pandaOnBack       = false;
+        data.pandaRolling      = false;
+        data.pandaSneezing     = false;
+        data.pandaSneezeCounter = 0;
+        data.pandaEating        = false;
 
         if (type == null) {
             return;
@@ -165,7 +214,7 @@ public class RemoteMorphState {
         data.cachedEntity = type.create(world, EntitySpawnReason.LOAD);
         if (data.cachedEntity == null) return;
 
-        applyVariantToEntity(data.cachedEntity, parrotVariant, catVariant, wolfVariant, cowVariant, sheepColor, pigVariant, chickenVariant, horseColor, horseMarkings, villagerProfession, villagerType, slimeSize, world);
+        applyVariantToEntity(data.cachedEntity, parrotVariant, catVariant, wolfVariant, cowVariant, sheepColor, pigVariant, chickenVariant, horseColor, horseMarkings, villagerProfession, villagerType, slimeSize, foxVariant, rabbitVariant, axolotlVariant, frogVariant, pandaGene, world);
 
         data.parrotVariant = parrotVariant;
         data.catVariant = catVariant;
@@ -183,7 +232,8 @@ public class RemoteMorphState {
                                              String sheepColor, String pigVariant,
                                              String chickenVariant, String horseColor,
                                              String horseMarkings, String villagerProfession,
-                                             String villagerType, String slimeSize, Level world) {
+                                             String villagerType, String slimeSize,
+                                             String foxVariant, String rabbitVariant, String axolotlVariant, String frogVariant, String pandaGene, Level world) {
         if (entity instanceof Parrot parrot && parrotVariant != null && !parrotVariant.isEmpty()) {
             try {
                 Parrot.Variant v = Parrot.Variant.valueOf(parrotVariant);
@@ -249,7 +299,6 @@ public class RemoteMorphState {
                 ((net.naw.morphling.mixin.accessors.HorseVariantAccessor) horse).morphling$setVariantAndMarkings(color, markings);
             } catch (Exception ignored) {}
         }
-
         if (entity instanceof net.minecraft.world.entity.npc.villager.Villager v) {
             try {
                 if (villagerProfession != null && !villagerProfession.isEmpty()) {
@@ -273,6 +322,45 @@ public class RemoteMorphState {
                 slime.setSize(Integer.parseInt(slimeSize), false);
             } catch (Exception ignored) {}
         }
+        // Fox variant — RED or SNOW
+        if (entity instanceof net.minecraft.world.entity.animal.fox.Fox fox && foxVariant != null && !foxVariant.isEmpty()) {
+            try {
+                net.minecraft.world.entity.animal.fox.Fox.Variant v = net.minecraft.world.entity.animal.fox.Fox.Variant.valueOf(foxVariant);
+                ((net.naw.morphling.mixin.accessors.FoxVariantAccessor) fox).morphling$setVariant(v);
+            } catch (Exception ignored) {}
+        }
+
+        if (entity instanceof net.minecraft.world.entity.animal.rabbit.Rabbit rabbit && rabbitVariant != null && !rabbitVariant.isEmpty()) {
+            try {
+                net.minecraft.world.entity.animal.rabbit.Rabbit.Variant v = net.minecraft.world.entity.animal.rabbit.Rabbit.Variant.valueOf(rabbitVariant);
+                ((net.naw.morphling.mixin.accessors.RabbitVariantAccessor) rabbit).morphling$setVariant(v);
+            } catch (Exception ignored) {}
+        }
+
+        if (entity instanceof net.minecraft.world.entity.animal.frog.Frog frog && frogVariant != null && !frogVariant.isEmpty()) {
+            try {
+                var registry = world.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.FROG_VARIANT);
+                registry.listElements()
+                        .filter(h -> h.unwrapKey().orElseThrow().identifier().toString().equals(frogVariant))
+                        .findFirst()
+                        .ifPresent(h -> ((net.naw.morphling.mixin.accessors.FrogVariantAccessor) frog).morphling$setVariant(h));
+            } catch (Exception ignored) {}
+        }
+
+        if (entity instanceof net.minecraft.world.entity.animal.panda.Panda panda && pandaGene != null && !pandaGene.isEmpty()) {
+            try {
+                net.minecraft.world.entity.animal.panda.Panda.Gene gene =
+                        net.minecraft.world.entity.animal.panda.Panda.Gene.valueOf(pandaGene);
+                panda.setMainGene(gene);
+                panda.setHiddenGene(gene);
+            } catch (Exception ignored) {}
+        }
+        if (entity instanceof net.minecraft.world.entity.animal.axolotl.Axolotl axolotl && axolotlVariant != null && !axolotlVariant.isEmpty()) {
+            try {
+                net.minecraft.world.entity.animal.axolotl.Axolotl.Variant v = net.minecraft.world.entity.animal.axolotl.Axolotl.Variant.valueOf(axolotlVariant.toUpperCase());
+                ((net.naw.morphling.mixin.accessors.AxolotlVariantAccessor) axolotl).morphling$setVariant(v);
+            } catch (Exception ignored) {}
+        }
     }
 
     /**
@@ -281,10 +369,20 @@ public class RemoteMorphState {
      * match what the remote player is actually doing.
      */
     public static void applyAbilityStates(UUID uuid, Entity remotePlayer) {
+
         PlayerMorphData data = states.get(uuid);
         if (data == null || data.cachedEntity == null) return;
 
         Entity e = data.cachedEntity;
+
+        // applyAbilityStates runs every render FRAME. Animation stepping below must
+        // run at TICK rate or it becomes frame-rate dependent (faster on high-fps
+        // clients). newTick is true only on the first frame of each player tick.
+        boolean newTick = false;
+        if (remotePlayer != null && remotePlayer.tickCount != data.lastAnimTick) {
+            data.lastAnimTick = remotePlayer.tickCount;
+            newTick = true;
+        }
 
         if (e instanceof Cat cat) {
             cat.setInSittingPose(false);
@@ -306,20 +404,22 @@ public class RemoteMorphState {
             wolf.setIsInterested(data.wolfHeadTilt);
             wolf.setPersistentAngerEndTime(data.wolfAngry ? Long.MAX_VALUE : -1L);
 
-            // Smoothly lerp head tilt angle
-            var tickAccessor = (net.naw.morphling.mixin.accessors.WolfTickAccessor) wolf;
-            float current = tickAccessor.morphling$getInterestedAngle();
-            tickAccessor.morphling$setInterestedAngleO(current);
-            float target = data.wolfHeadTilt ? 1.0F : 0.0F;
-            tickAccessor.morphling$setInterestedAngle(current + (target - current) * 0.4F);
+            // Smoothly lerp head tilt angle (tick rate — renderer interpolates O→current)
+            if (newTick) {
+                var tickAccessor = (net.naw.morphling.mixin.accessors.WolfTickAccessor) wolf;
+                float current = tickAccessor.morphling$getInterestedAngle();
+                tickAccessor.morphling$setInterestedAngleO(current);
+                float target = data.wolfHeadTilt ? 1.0F : 0.0F;
+                tickAccessor.morphling$setInterestedAngle(current + (target - current) * 0.4F);
+            }
 
-            if (data.wolfShaking) {
+            if (data.wolfShaking && newTick) {
                 var shakeAccessor = (net.naw.morphling.mixin.accessors.WolfShakeAccessor) wolf;
                 shakeAccessor.morphling$setIsWet(true);
                 shakeAccessor.morphling$setIsShaking(true);
                 float shakeAnim = shakeAccessor.morphling$getShakeAnim();
                 shakeAccessor.morphling$setShakeAnimO(shakeAnim);
-                shakeAnim += 0.02F;
+                shakeAnim += 0.06F; // per-tick now (was 0.02F per-frame at ~60fps)
                 shakeAccessor.morphling$setShakeAnim(shakeAnim);
                 if (shakeAnim >= 2.0F) {
                     data.wolfShaking = false;
@@ -336,25 +436,30 @@ public class RemoteMorphState {
             if (remotePlayer instanceof net.minecraft.world.entity.player.Player rp) {
                 parrot.setRecordPlayingNearby(rp.blockPosition(), data.parrotDancing);
             }
-            // Flap animation — rate-limited to avoid jitter on remote clients
-            parrot.oFlap = parrot.flap;
-            parrot.oFlapSpeed = parrot.flapSpeed;
-            if (data.flying) {
-                parrot.flapSpeed = Math.min(parrot.flapSpeed + 0.02F, 1.0F);
-                parrot.flap += parrot.flapSpeed * 0.2F;
-            } else {
-                parrot.flapSpeed = Math.max(parrot.flapSpeed - 0.02F, 0.0F);
+
+            // Flap animation — stepped at tick rate so speed is frame-rate independent
+            if (newTick) {
+                parrot.oFlap = parrot.flap;
+                parrot.oFlapSpeed = parrot.flapSpeed;
+                if (data.flying) {
+                    parrot.flapSpeed = Math.min(parrot.flapSpeed + 0.30F, 1.0F);
+                    parrot.flap += parrot.flapSpeed * 1.8F;
+                } else {
+                    parrot.flapSpeed = Math.max(parrot.flapSpeed - 0.1F, 0.0F);
+                }
             }
         }
 
         if (e instanceof net.minecraft.world.entity.animal.chicken.Chicken chicken) {
-            chicken.oFlap = chicken.flap;
-            chicken.oFlapSpeed = chicken.flapSpeed;
-            if (remotePlayer != null && !remotePlayer.onGround()) {
-                chicken.flapSpeed = Math.min(chicken.flapSpeed + 0.02F, 1.0F);
-                chicken.flap += chicken.flapSpeed * 0.2F;
-            } else {
-                chicken.flapSpeed = Math.max(chicken.flapSpeed - 0.02F, 0.0F);
+            if (newTick) {
+                chicken.oFlap = chicken.flap;
+                chicken.oFlapSpeed = chicken.flapSpeed;
+                if (!remotePlayer.onGround()) {
+                    chicken.flapSpeed = 1.0F;
+                    chicken.flap += chicken.flapSpeed * 1.8F;
+                } else {
+                    chicken.flapSpeed = 0.0F;
+                }
             }
         }
 
@@ -441,46 +546,60 @@ public class RemoteMorphState {
         if (e instanceof Sheep sheep) {
             var accessor = (net.naw.morphling.mixin.accessors.SheepEatAccessor) sheep;
             if (data.sheepEating) {
-                // Rate-limited tick to keep eating animation smooth on remote clients
-                data.sheepAnimTicker++;
-                if (data.sheepAnimTicker % 8 == 0) {
+                // Mirror local SheepAbility exactly: fire vanilla eat event ONCE
+                // (sets counter to 40), then burn down -1 per tick. One-shot, no loop.
+                if (!data.sheepEatApplied) {
+                    sheep.handleEntityEvent((byte) 10);
+                    data.sheepEatApplied = true;
+                } else if (newTick) {
                     int tick = accessor.morphling$getEatAnimationTick();
-                    accessor.morphling$setEatAnimationTick((tick + 1) % 40);
+                    if (tick > 0) accessor.morphling$setEatAnimationTick(tick - 1);
                 }
             } else {
                 accessor.morphling$setEatAnimationTick(0);
-                data.sheepAnimTicker = 0;
+                data.sheepEatApplied = false;
             }
         }
 
         if (e instanceof net.minecraft.world.entity.animal.equine.Horse horse) {
-            if (data.horseRearing) ((net.naw.morphling.mixin.accessors.AbstractHorseAccessor) horse).morphling$setStanding(30);
+            if (data.horseRearing && !data.horseRearApplied) {
+                ((net.naw.morphling.mixin.accessors.AbstractHorseAccessor) horse).morphling$setStanding(30);
+                data.horseRearApplied = true;
+            } else if (!data.horseRearing) {
+                data.horseRearApplied = false;
+            }
             ((net.naw.morphling.mixin.accessors.AbstractHorseAccessor) horse).morphling$setEating(data.horseEating);
-            // Tick the horse entity so animation floats (standAnim, eatAnim) actually update
+
+            // Tick the horse entity so animation floats (standAnim, eatAnim) actually update.
+            // Gated to tick rate — per-frame tick() made animations frame-rate dependent.
             assert remotePlayer != null;
-            horse.setPos(remotePlayer.getX(), remotePlayer.getY(), remotePlayer.getZ());
-            horse.setDeltaMovement(0, 0, 0);
-            try { horse.tick(); } catch (Exception ignored) {}
-            horse.setPos(remotePlayer.getX(), remotePlayer.getY(), remotePlayer.getZ());
-            horse.setDeltaMovement(0, 0, 0);
+            if (newTick) {
+                horse.setPos(remotePlayer.getX(), remotePlayer.getY(), remotePlayer.getZ());
+                horse.setDeltaMovement(0, 0, 0);
+                try { horse.tick(); } catch (Exception ignored) {}
+                horse.setPos(remotePlayer.getX(), remotePlayer.getY(), remotePlayer.getZ());
+                horse.setDeltaMovement(0, 0, 0);
+            }
         }
 
         if (e instanceof net.minecraft.world.entity.npc.villager.Villager villager) {
-            // Only tick when not sleeping so rotation lock isn't overridden
-            if (!data.villagerSleeping) {
-                if (remotePlayer != null) villager.setPos(remotePlayer.getX(), remotePlayer.getY(), remotePlayer.getZ());
+            // Only tick when not sleeping so rotation lock isn't overridden.
+            // Gated to tick rate — per-frame tick() burned the unhappy counter at
+            // viewer-fps speed (300 was compensating for that; vanilla is 40).
+            if (!data.villagerSleeping && newTick) {
+                villager.setPos(remotePlayer.getX(), remotePlayer.getY(), remotePlayer.getZ());
                 try { villager.tick(); } catch (Exception ignored) {}
                 villager.setDeltaMovement(0, 0, 0);
-                if (remotePlayer != null) villager.setPos(remotePlayer.getX(), remotePlayer.getY(), remotePlayer.getZ());
+                villager.setPos(remotePlayer.getX(), remotePlayer.getY(), remotePlayer.getZ());
             }
 
             if (data.villagerUnhappy) {
-                villager.setUnhappyCounter(300);
+                villager.setUnhappyCounter(40); // matches local + vanilla (2s)
                 data.villagerUnhappy = false;
             }
 
             if (data.villagerSleeping) {
-                if (villager.getUnhappyCounter() > 0) {
+                if (newTick && villager.getUnhappyCounter() > 0) {
                     villager.setUnhappyCounter(villager.getUnhappyCounter() - 1);
                 }
                 if (remotePlayer != null) {
@@ -499,11 +618,33 @@ public class RemoteMorphState {
             }
         }
 
+        if (e instanceof net.minecraft.world.entity.animal.rabbit.Rabbit rabbit) {
+            if (data.rabbitSitting) {
+                rabbit.idleHeadTiltAnimationState.startIfStopped(rabbit.tickCount);
+            } else {
+                rabbit.idleHeadTiltAnimationState.stop();
+            }
+        }
+
+        // Fox — apply all pose states to cached fox entity
+        if (e instanceof net.minecraft.world.entity.animal.fox.Fox fox) {
+            ((net.naw.morphling.mixin.accessors.FoxVariantAccessor) fox).morphling$setSitting(data.foxSitting);
+            ((net.naw.morphling.mixin.accessors.FoxVariantAccessor) fox).morphling$setSleeping(data.foxSleeping);
+            fox.setIsCrouching(data.foxCrouching);
+            fox.setIsInterested(data.foxInterested);
+            fox.setIsPouncing(data.foxPouncing);
+        }
+
+        if (e instanceof net.minecraft.world.entity.animal.axolotl.Axolotl axolotl) {
+            axolotl.setPlayingDead(data.axolotlPlayingDead);
+        }
+
         if (data.morphType == EntityType.BEE && remotePlayer != null && data.flying) {
             if (remotePlayer.getPose() == net.minecraft.world.entity.Pose.CROUCHING) {
                 remotePlayer.setPose(net.minecraft.world.entity.Pose.STANDING);
             }
         }
+
 
     }
 }
