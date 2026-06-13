@@ -34,7 +34,7 @@ import java.util.UUID;
 
  * Server-side player state:
  *   playerMorphMap   — UUID → entityTypeId
- *   playerVariantMap — UUID → String[12] (variants)
+ *   playerVariantMap — UUID → String[17] (variants, index 15 = frogVariant, index 16 = pandaGene)
 
  * Ability actions are handled in AbilityActionHandler.
  */
@@ -42,6 +42,8 @@ public class MorphlingNetworking {
 
     public static final java.util.Map<UUID, String> playerMorphMap = new java.util.concurrent.ConcurrentHashMap<>();
     public static final java.util.Map<UUID, String[]> playerVariantMap = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public static final java.util.Set<UUID> axolotlPlayingDead = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     // ─── Server → Client ────────────────────────────────────────────────────
 
@@ -51,13 +53,17 @@ public class MorphlingNetworking {
         @Override public @NonNull Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
 
+    // ── Fox variant = index 12, Rabbit = index 13, Axolotl = index 14, Frog = index 15, Panda gene = index 16 ──
     public record MorphSyncPayload(
             UUID playerUuid, String entityTypeId,
             String parrotVariant, String catVariant, String wolfVariant, String cowVariant,
             String sheepColor, String pigVariant, String chickenVariant,
             String horseColor, String horseMarkings,
-            String villagerProfession, String villagerType, String slimeSize
+            String villagerProfession, String villagerType, String slimeSize,
+            String foxVariant, String rabbitVariant, String axolotlVariant, String frogVariant,
+            String pandaGene
     ) implements CustomPacketPayload {
+
         public static final Type<MorphSyncPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath("morphling", "morph_sync"));
         public static final StreamCodec<RegistryFriendlyByteBuf, MorphSyncPayload> CODEC = StreamCodec.of(
                 (buf, p) -> {
@@ -74,12 +80,18 @@ public class MorphlingNetworking {
                     buf.writeUtf(p.villagerProfession() != null ? p.villagerProfession() : "");
                     buf.writeUtf(p.villagerType() != null ? p.villagerType() : "");
                     buf.writeUtf(p.slimeSize() != null ? p.slimeSize() : "2");
+                    buf.writeUtf(p.foxVariant() != null ? p.foxVariant() : "RED");
+                    buf.writeUtf(p.rabbitVariant() != null ? p.rabbitVariant() : "BROWN");
+                    buf.writeUtf(p.axolotlVariant() != null ? p.axolotlVariant() : "LUCY");
+                    buf.writeUtf(p.frogVariant() != null ? p.frogVariant() : "");
+                    buf.writeUtf(p.pandaGene() != null ? p.pandaGene() : "NORMAL");
                 },
                 buf -> new MorphSyncPayload(
                         buf.readUUID(), buf.readUtf(), buf.readUtf(), buf.readUtf(),
                         buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readUtf(),
                         buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readUtf(),
-                        buf.readUtf(), buf.readUtf()
+                        buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readUtf(),
+                        buf.readUtf(), buf.readUtf(), buf.readUtf() // 19 reads total
                 )
         );
         @Override public @NonNull Type<? extends CustomPacketPayload> type() { return TYPE; }
@@ -135,13 +147,17 @@ public class MorphlingNetworking {
 
     // ─── Client → Server ────────────────────────────────────────────────────
 
+    // ── Fox variant = index 12, Rabbit = index 13, Axolotl = index 14, Frog = index 15, Panda gene = index 16 ──
     public record MorphRequestPayload(
             String entityTypeId,
             String parrotVariant, String catVariant, String wolfVariant, String cowVariant,
             String sheepColor, String pigVariant, String chickenVariant,
             String horseColor, String horseMarkings,
-            String villagerProfession, String villagerType, String slimeSize
+            String villagerProfession, String villagerType, String slimeSize,
+            String foxVariant, String rabbitVariant, String axolotlVariant, String frogVariant,
+            String pandaGene
     ) implements CustomPacketPayload {
+
         public static final Type<MorphRequestPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath("morphling", "morph_request"));
         public static final StreamCodec<RegistryFriendlyByteBuf, MorphRequestPayload> CODEC = StreamCodec.of(
                 (buf, p) -> {
@@ -158,11 +174,18 @@ public class MorphlingNetworking {
                     buf.writeUtf(p.villagerProfession() != null ? p.villagerProfession() : "");
                     buf.writeUtf(p.villagerType() != null ? p.villagerType() : "");
                     buf.writeUtf(p.slimeSize() != null ? p.slimeSize() : "2");
+                    buf.writeUtf(p.foxVariant() != null ? p.foxVariant() : "RED");
+                    buf.writeUtf(p.rabbitVariant() != null ? p.rabbitVariant() : "BROWN");
+                    buf.writeUtf(p.axolotlVariant() != null ? p.axolotlVariant() : "LUCY");
+                    buf.writeUtf(p.frogVariant() != null ? p.frogVariant() : "");
+                    buf.writeUtf(p.pandaGene() != null ? p.pandaGene() : "NORMAL");
                 },
                 buf -> new MorphRequestPayload(
                         buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readUtf(),
                         buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readUtf(),
-                        buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readUtf()
+                        buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readUtf(),
+                        buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readUtf(),
+                        buf.readUtf(), buf.readUtf() // 18 reads total
                 )
         );
         @Override public @NonNull Type<? extends CustomPacketPayload> type() { return TYPE; }
@@ -251,15 +274,20 @@ public class MorphlingNetworking {
 
             for (Map.Entry<UUID, String> entry : playerMorphMap.entrySet()) {
                 if (entry.getKey().equals(handler.player.getUUID())) continue;
-                String[] variants = playerVariantMap.getOrDefault(entry.getKey(), new String[]{"", "", "", "", "", "", "", "", "", "", "", ""});
+                String[] variants = playerVariantMap.getOrDefault(entry.getKey(), new String[]{"", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""});
                 ServerPlayNetworking.send(handler.player, new MorphSyncPayload(
                         entry.getKey(), entry.getValue(),
                         variants[0], variants[1], variants[2], variants[3], variants[4], variants[5], variants[6],
-                        variants.length > 7 ? variants[7] : "",
-                        variants.length > 8 ? variants[8] : "",
-                        variants.length > 9 ? variants[9] : "",
+                        variants.length > 7  ? variants[7]  : "",
+                        variants.length > 8  ? variants[8]  : "",
+                        variants.length > 9  ? variants[9]  : "",
                         variants.length > 10 ? variants[10] : "",
-                        variants.length > 11 ? variants[11] : "2"
+                        variants.length > 11 ? variants[11] : "2",
+                        variants.length > 12 ? variants[12] : "RED",
+                        variants.length > 13 ? variants[13] : "BROWN",
+                        variants.length > 14 ? variants[14] : "LUCY",
+                        variants.length > 15 ? variants[15] : "",       // frog variant
+                        variants.length > 16 ? variants[16] : "NORMAL"  // panda gene
                 ));
             }
         });
@@ -267,7 +295,9 @@ public class MorphlingNetworking {
         // On disconnect: notify all remaining players that this player unmorphed
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             UUID leftUuid = handler.player.getUUID();
-            MorphSyncPayload syncPayload = new MorphSyncPayload(leftUuid, "", "", "", "", "", "", "", "", "", "", "", "", "2");
+            axolotlPlayingDead.remove(leftUuid);
+            handler.player.removeEffect(net.minecraft.world.effect.MobEffects.REGENERATION);
+            MorphSyncPayload syncPayload = new MorphSyncPayload(leftUuid, "", "", "", "", "", "", "", "", "", "", "", "", "2", "RED", "BROWN", "LUCY", "", "NORMAL");
             for (ServerPlayer other : server.getPlayerList().getPlayers()) {
                 ServerPlayNetworking.send(other, syncPayload);
             }
@@ -301,11 +331,17 @@ public class MorphlingNetworking {
                 senderPlayer.onUpdateAbilities();
             });
 
+            // Store all variants including fox (12), rabbit (13), axolotl (14), frog (15), panda gene (16)
             playerVariantMap.put(senderPlayer.getUUID(), new String[]{
                     payload.parrotVariant(), payload.catVariant(), payload.wolfVariant(),
                     payload.cowVariant(), payload.sheepColor(), payload.pigVariant(), payload.chickenVariant(),
                     payload.horseColor(), payload.horseMarkings(),
-                    payload.villagerProfession(), payload.villagerType(), payload.slimeSize()
+                    payload.villagerProfession(), payload.villagerType(), payload.slimeSize(),
+                    payload.foxVariant(),      // index 12
+                    payload.rabbitVariant(),   // index 13
+                    payload.axolotlVariant(),  // index 14
+                    payload.frogVariant(),     // index 15
+                    payload.pandaGene()        // index 16
             });
 
             MorphSyncPayload syncPayload = new MorphSyncPayload(
@@ -313,7 +349,9 @@ public class MorphlingNetworking {
                     payload.parrotVariant(), payload.catVariant(), payload.wolfVariant(),
                     payload.cowVariant(), payload.sheepColor(), payload.pigVariant(), payload.chickenVariant(),
                     payload.horseColor(), payload.horseMarkings(),
-                    payload.villagerProfession(), payload.villagerType(), payload.slimeSize()
+                    payload.villagerProfession(), payload.villagerType(), payload.slimeSize(),
+                    payload.foxVariant(), payload.rabbitVariant(), payload.axolotlVariant(),
+                    payload.frogVariant(), payload.pandaGene()
             );
             for (ServerPlayer other : context.server().getPlayerList().getPlayers()) {
                 if (other == senderPlayer) continue;
@@ -321,9 +359,18 @@ public class MorphlingNetworking {
             }
         });
 
-        // Visual ability state changed — relay to all other players
         ServerPlayNetworking.registerGlobalReceiver(AbilityStatePayload.TYPE, (payload, context) -> {
             ServerPlayer senderPlayer = context.player();
+
+            // Store axolotl play dead state server-side for mob targeting
+            if ("axolotl_playdead".equals(payload.abilityKey())) {
+                if (Boolean.parseBoolean(payload.value())) {
+                    axolotlPlayingDead.add(senderPlayer.getUUID());
+                } else {
+                    axolotlPlayingDead.remove(senderPlayer.getUUID());
+                }
+            }
+
             AbilitySyncPayload syncPayload = new AbilitySyncPayload(
                     senderPlayer.getUUID(), payload.abilityKey(), payload.value()
             );
@@ -344,15 +391,20 @@ public class MorphlingNetworking {
                     if (morphTypeId != null && !morphTypeId.isEmpty()) {
                         EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.parse(morphTypeId));
                         ((MorphDataProvider) player).morphling$setSavedMorph(type);
-                        String[] variants = playerVariantMap.getOrDefault(player.getUUID(), new String[]{"", "", "", "", "", "", "", "", "", "", "", ""});
+                        String[] variants = playerVariantMap.getOrDefault(player.getUUID(), new String[]{"", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""});
                         MorphSyncPayload syncPayload = new MorphSyncPayload(
                                 player.getUUID(), morphTypeId,
                                 variants[0], variants[1], variants[2], variants[3], variants[4], variants[5], variants[6],
-                                variants.length > 7 ? variants[7] : "",
-                                variants.length > 8 ? variants[8] : "",
-                                variants.length > 9 ? variants[9] : "",
+                                variants.length > 7  ? variants[7]  : "",
+                                variants.length > 8  ? variants[8]  : "",
+                                variants.length > 9  ? variants[9]  : "",
                                 variants.length > 10 ? variants[10] : "",
-                                variants.length > 11 ? variants[11] : "2"
+                                variants.length > 11 ? variants[11] : "2",
+                                variants.length > 12 ? variants[12] : "RED",
+                                variants.length > 13 ? variants[13] : "BROWN",
+                                variants.length > 14 ? variants[14] : "LUCY",
+                                variants.length > 15 ? variants[15] : "",       // frog variant
+                                variants.length > 16 ? variants[16] : "NORMAL"  // panda gene
                         );
                         for (ServerPlayer other : context.server().getPlayerList().getPlayers()) {
                             if (other == player) continue;
@@ -365,15 +417,20 @@ public class MorphlingNetworking {
                         if (other == player) continue;
                         String otherMorphId = playerMorphMap.get(other.getUUID());
                         if (otherMorphId != null && !otherMorphId.isEmpty()) {
-                            String[] variants = playerVariantMap.getOrDefault(other.getUUID(), new String[]{"", "", "", "", "", "", "", "", "", "", "", ""});
+                            String[] variants = playerVariantMap.getOrDefault(other.getUUID(), new String[]{"", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""});
                             ServerPlayNetworking.send(player, new MorphSyncPayload(
                                     other.getUUID(), otherMorphId,
                                     variants[0], variants[1], variants[2], variants[3], variants[4], variants[5], variants[6],
-                                    variants.length > 7 ? variants[7] : "",
-                                    variants.length > 8 ? variants[8] : "",
-                                    variants.length > 9 ? variants[9] : "",
+                                    variants.length > 7  ? variants[7]  : "",
+                                    variants.length > 8  ? variants[8]  : "",
+                                    variants.length > 9  ? variants[9]  : "",
                                     variants.length > 10 ? variants[10] : "",
-                                    variants.length > 11 ? variants[11] : "2"
+                                    variants.length > 11 ? variants[11] : "2",
+                                    variants.length > 12 ? variants[12] : "RED",
+                                    variants.length > 13 ? variants[13] : "BROWN",
+                                    variants.length > 14 ? variants[14] : "LUCY",
+                                    variants.length > 15 ? variants[15] : "",       // frog variant
+                                    variants.length > 16 ? variants[16] : "NORMAL"  // panda gene
                             ));
                         }
                     }
@@ -399,8 +456,19 @@ public class MorphlingNetworking {
         // Health request — apply morph max health on the server
         ServerPlayNetworking.registerGlobalReceiver(HealthRequestPayload.TYPE, (payload, context) -> {
             ServerPlayer player = context.player();
+
             context.server().execute(() -> {
+                // Mob Brawl owns health for players in an active fight — don't let the morph
+                // health system re-add the morph modifier (would override Equal/Double mode,
+                // especially on respawn where this fires right after the brawl heal).
+                var brawl = net.naw.morphling.client.games.MobBrawl.MobBrawlServerGame.getByPlayer(player.getUUID());
+                if (brawl != null
+                        && brawl.getPhase() == net.naw.morphling.client.games.MobBrawl.MobBrawlServerGame.Phase.FIGHTING
+                        && brawl.getHealthMode() != 0) {
+                    return;
+                }
                 AttributeInstance attr = player.getAttribute(Attributes.MAX_HEALTH);
+
                 if (attr == null) return;
 
                 Identifier modifierId = Identifier.fromNamespaceAndPath("morphling", "morph_health");
