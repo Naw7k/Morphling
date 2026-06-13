@@ -21,7 +21,9 @@ public class AbilityActionHandler {
             // ── Creeper ──────────────────────────────────────────────────────
             case "creeper_explode" -> player.level().explode(
                     player, player.getX(), player.getY(), player.getZ(),
-                    3.0F, Level.ExplosionInteraction.MOB
+                    3.0F, net.naw.morphling.client.games.MobBrawl.BrawlDimension.isBrawlDimension(player.level())
+                            ? Level.ExplosionInteraction.NONE
+                            : Level.ExplosionInteraction.MOB
             );
 
             // ── Chicken ──────────────────────────────────────────────────────
@@ -182,6 +184,59 @@ public class AbilityActionHandler {
                                 net.minecraft.world.effect.MobEffects.POISON, 200, 0), player);
                     }
                 } catch (Exception ignored) {}
+            }
+
+            // Axolotl — apply/remove regen when playing dead (200 ticks = 10s, matches vanilla)
+            case "axolotl_playdead_on" -> player.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                    net.minecraft.world.effect.MobEffects.REGENERATION, 200, 0));
+            case "axolotl_playdead_off" -> player.removeEffect(net.minecraft.world.effect.MobEffects.REGENERATION);
+
+            case "axolotl_dry_damage" -> player.hurtServer(
+                    player.level(),
+                    player.damageSources().dryOut(), 2.0F
+            );
+
+
+// ── Frog ─────────────────────────────────────────────────────────────────
+            // Phase 1: apply pull velocity, no damage yet
+            case "frog_tongue_pull" -> {
+                try {
+                    java.util.UUID targetUuid = java.util.UUID.fromString(data);
+                    net.minecraft.world.entity.Entity target = player.level().getEntity(targetUuid);
+                    if (target instanceof net.minecraft.world.entity.LivingEntity living && living.isAlive()) {
+                        // Vanilla-accurate pull: vectorTo = from target toward player
+                        net.minecraft.world.phys.Vec3 dir = target.position().vectorTo(player.position()).normalize().scale(0.75);
+                        target.setDeltaMovement(dir.x, dir.y + 0.2, dir.z);
+                        target.hurtMarked = true; // critical — replicates velocity to other clients
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            // Phase 2: deal damage after pull window (client sends this 6 ticks later)
+            case "frog_tongue_eat" -> {
+                try {
+                    java.util.UUID targetUuid = java.util.UUID.fromString(data);
+                    net.minecraft.world.entity.Entity target = player.level().getEntity(targetUuid);
+                    if (target instanceof net.minecraft.world.entity.LivingEntity living && living.isAlive()) {
+                        //noinspection deprecation
+                        living.hurt(player.level().damageSources().mobAttack(player), 4.0F);
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            // ── Panda ─────────────────────────────────────────────────────────
+            case "panda_sneeze_finish" -> {
+                // Spawn sneeze particle at player position
+                if (player.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+                    net.minecraft.world.phys.Vec3 movement = player.getDeltaMovement();
+                    serverLevel.sendParticles(
+                            net.minecraft.core.particles.ParticleTypes.SNEEZE,
+                            player.getX() - Math.sin(Math.toRadians(player.yBodyRot)) * 0.5,
+                            player.getEyeY() - 0.1,
+                            player.getZ() + Math.cos(Math.toRadians(player.yBodyRot)) * 0.5,
+                            1, movement.x, 0.0, movement.z, 0.0
+                    );
+                }
             }
         }
     }
