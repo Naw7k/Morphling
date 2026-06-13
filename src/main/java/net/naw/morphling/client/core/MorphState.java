@@ -110,6 +110,9 @@ public class MorphState {
             }
         }
 
+        // Clear axolotl play dead state on morph restore — ensures no lingering regen
+        MorphState.sendAbilityAction("axolotl_playdead_off", "");
+
         if (type == EntityType.IRON_GOLEM) {
             net.naw.morphling.client.hunger.IronGolemHunger.onMorphToGolem();
         } else {
@@ -256,8 +259,22 @@ public class MorphState {
 
         String slimeSize = String.valueOf(MorphVariantManager.getSlimeSize());
 
+        String foxVariant = MorphVariantManager.getFoxVariant() != null
+                ? MorphVariantManager.getFoxVariant().name() : "RED";
+
+        String rabbitVariant = MorphVariantManager.getRabbitVariant() != null
+                ? MorphVariantManager.getRabbitVariant().name() : "BROWN";
+        String axolotlVariant = MorphVariantManager.getAxolotlVariant() != null
+                ? MorphVariantManager.getAxolotlVariant().name() : "LUCY";
+
+        String frogVariant = MorphVariantManager.getFrogVariant() != null
+                ? MorphVariantManager.getFrogVariant().unwrapKey().orElseThrow().identifier().toString() : "";
+
+        String pandaGene = MorphVariantManager.getPandaGene() != null
+                ? MorphVariantManager.getPandaGene().name() : "NORMAL";
+
         ClientPlayNetworking.send(new MorphlingNetworking.MorphRequestPayload(
-                entityTypeId, parrotVariant, catVariant, wolfVariant, cowVariant, sheepColor, pigVariant, chickenVariant, horseColor, horseMarkings, villagerProfession, villagerType, slimeSize
+                entityTypeId, parrotVariant, catVariant, wolfVariant, cowVariant, sheepColor, pigVariant, chickenVariant, horseColor, horseMarkings, villagerProfession, villagerType, slimeSize, foxVariant, rabbitVariant, axolotlVariant, frogVariant, pandaGene
         ));
     }
 
@@ -285,7 +302,7 @@ public class MorphState {
         AttributeInstance playerSpeed = player.getAttribute(Attributes.MOVEMENT_SPEED);
         AttributeInstance morphSpeed = livingMorph.getAttribute(Attributes.MOVEMENT_SPEED);
         if (playerSpeed != null && morphSpeed != null) {
-            double scaledSpeed = morphSpeed.getBaseValue() * (currentMorph == EntityType.DOLPHIN ? 0.08 : currentMorph == EntityType.HORSE ? 0.45 : 0.25);
+            double scaledSpeed = morphSpeed.getBaseValue() * (currentMorph == EntityType.DOLPHIN || currentMorph == EntityType.AXOLOTL ? 0.01 : currentMorph == EntityType.HORSE ? 0.45 : 0.25);
             playerSpeed.setBaseValue(scaledSpeed);
         }
 
@@ -387,8 +404,17 @@ public class MorphState {
             if (currentMorph == EntityType.DOLPHIN) {
                 baseScale = 0.08;
             }
+            if (currentMorph == EntityType.AXOLOTL) {
+                baseScale = 0.01;
+            }
             if (currentMorph == EntityType.SLIME) {
                 baseScale = 0.0;
+            }
+            if (currentMorph == EntityType.RABBIT) {
+                baseScale = 0.0;
+            }
+            if (currentMorph == EntityType.FROG) {
+                baseScale = 0.01;
             }
             if (currentMorph == EntityType.HORSE) {
                 baseScale = 0.45;
@@ -399,7 +425,8 @@ public class MorphState {
             double scrollRatio = net.naw.morphling.client.compat.ScrollWalkCompat.getSpeedRatio();
             double scaledSpeed = morphSpeed.getBaseValue() * baseScale * scrollRatio;
             if (player.isSprinting()) {
-                scaledSpeed = morphSpeed.getBaseValue() * (baseScale + 0.1) * scrollRatio;
+                double sprintBoost = (currentMorph == EntityType.FROG) ? 0.02 : 0.1;
+                scaledSpeed = morphSpeed.getBaseValue() * (baseScale + sprintBoost) * scrollRatio;
             }
             if (playerSpeed.getBaseValue() != scaledSpeed) {
                 playerSpeed.setBaseValue(scaledSpeed);
