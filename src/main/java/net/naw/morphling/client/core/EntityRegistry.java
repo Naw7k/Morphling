@@ -48,6 +48,12 @@ public class EntityRegistry {
         addMorph(list, EntityType.IRON_GOLEM);
         addMorph(list, EntityType.DOLPHIN);
         addMorph(list, EntityType.BEE);
+        addMorph(list, EntityType.FOX);
+        addMorph(list, EntityType.RABBIT);
+        addMorph(list, EntityType.AXOLOTL);
+        addMorph(list, EntityType.FROG);
+        addMorph(list, EntityType.POLAR_BEAR);
+        addMorph(list, EntityType.PANDA);
 
         // Hostile
         addMorph(list, EntityType.ZOMBIE);
